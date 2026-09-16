@@ -1,0 +1,233 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ----------------------------------------------------
+// ENUMS
+// ----------------------------------------------------
+
+enum PaymentStatus {
+  PAID
+  PARTIAL
+  UNPAID
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  POS
+  CREDIT
+}
+
+enum StockAdjustmentReason {
+  RESTOCK
+  SALE
+  DAMAGE
+  EXPIRED
+  THEFT_OR_LOSS
+  MANUAL_CORRECTION
+}
+
+enum ExpenseCategory {
+  RENT
+  UTILITIES
+  LOGISTICS
+  SALARIES
+  PACKAGING
+  MISCELLANEOUS
+}
+
+// ----------------------------------------------------
+// USER & BUSINESS PROFILE
+// ----------------------------------------------------
+
+model Business {
+  id         String     @id @default(uuid())
+  name       String
+  phone      String?
+  currency   String     @default("NGN")
+  categories Category[]
+  products   Product[]
+  sales      Sale[]
+  customers  Customer[]
+  expenses   Expense[]
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+}
+
+// ----------------------------------------------------
+// INVENTORY CATEGORIES
+// ----------------------------------------------------
+
+model Category {
+  id          String    @id @default(uuid())
+  businessId  String
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([businessId, name])
+  @@index([businessId])
+}
+
+// ----------------------------------------------------
+// INVENTORY & PRODUCTS
+// ----------------------------------------------------
+
+model Product {
+  id            String          @id @default(uuid())
+  businessId    String
+  business      Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  categoryId    String?
+  categoryRel   Category?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  category      String?         // Retained for fallback / quick display
+  name          String
+  sku           String?         @unique
+  barcode       String?         @unique
+  
+  // Cost vs Selling Price (to measure potential markup)
+  costPrice     Float           // Current supplier buying cost
+  sellingPrice  Float           // Current retail price
+  
+  // Stock tracking
+  currentStock  Int             @default(0)
+  minStockAlert Int             @default(5)
+
+  movements     StockMovement[]
+  saleItems     SaleItem[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([businessId])
+  @@index([categoryId])
+}
+
+model StockMovement {
+  id        String                @id @default(uuid())
+  productId String
+  quantity  Int                   // Positive for addition, negative for deduction
+  reason    StockAdjustmentReason
+  note      String?
+  createdAt DateTime              @default(now())
+
+  product   Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+// ----------------------------------------------------
+// SALES & ORDER ITEMS (Profit Engine)
+// ----------------------------------------------------
+
+model Sale {
+  id            String        @id @default(uuid())
+  businessId    String
+  customerId    String?       // Nullable if sold to anonymous walk-in
+  receiptNumber String        @unique
+
+  // Financial summary
+  subtotal      Float
+  discount      Float         @default(0)
+  totalAmount   Float         // subtotal - discount
+  amountPaid    Float         @default(0)
+  balanceDue    Float         @default(0) // totalAmount - amountPaid (Debtor tracker)
+
+  paymentMethod PaymentMethod @default(CASH)
+  paymentStatus PaymentStatus @default(PAID)
+  notes         String?
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  business      Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer      Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  items         SaleItem[]
+  debtPayments  DebtPayment[]
+
+  @@index([businessId])
+  @@index([customerId])
+}
+
+model SaleItem {
+  id               String   @id @default(uuid())
+  saleId           String
+  productId        String
+  quantity         Int
+
+  // Pricing Snapshots (Permanent record of margin at the moment of checkout)
+  unitCostPrice    Float    // Buying cost at sale moment (COGS snapshot)
+  unitSellingPrice Float    // Selling price at sale moment
+  totalCostPrice   Float    // unitCostPrice * quantity
+  totalRevenue     Float    // unitSellingPrice * quantity
+  grossProfit      Float    // totalRevenue - totalCostPrice
+
+  sale             Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product          Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([saleId])
+  @@index([productId])
+}
+
+// ----------------------------------------------------
+// CUSTOMERS & DEBT / RECEIVABLES
+// ----------------------------------------------------
+
+model Customer {
+  id           String        @id @default(uuid())
+  businessId   String
+  name         String
+  phone        String
+  email        String?
+  totalOwed    Float         @default(0) // Aggregated outstanding debt
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sales        Sale[]
+  debtPayments DebtPayment[]
+
+  @@index([businessId])
+}
+
+model DebtPayment {
+  id            String        @id @default(uuid())
+  saleId        String
+  customerId    String
+  amount        Float
+  paymentMethod PaymentMethod @default(CASH)
+  note          String?
+  paidAt        DateTime      @default(now())
+
+  sale          Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  customer      Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([saleId])
+  @@index([customerId])
+}
+
+// ----------------------------------------------------
+// OPERATING EXPENSES (For True Net Margin)
+// ----------------------------------------------------
+
+model Expense {
+  id         String          @id @default(uuid())
+  businessId String
+  title      String
+  category   ExpenseCategory @default(MISCELLANEOUS)
+  amount     Float
+  date       DateTime        @default(now())
+  note       String?
+
+  business   Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+}

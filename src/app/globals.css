@@ -1,26 +1,62 @@
+/* src/app/globals.css */
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  /* Canvas & Surface Colors */
+  --color-brand-surface: #f8fafc;
+  --color-brand-card: #ffffff;
+  --color-brand-border: #e2e8f0;
+  --color-brand-ink: #090d14;
+  --color-brand-muted: #64748b;
+
+  /* Fintech Status Tokens */
+  --color-fintech-mint: #10b981;
+  --color-fintech-mint-light: #ecfdf5;
+  --color-fintech-mint-border: #a7f3d0;
+
+  --color-fintech-amber: #f59e0b;
+  --color-fintech-amber-light: #fffbeb;
+  --color-fintech-amber-border: #fde68a;
+
+  --color-fintech-rose: #e11d48;
+  --color-fintech-rose-light: #fff1f2;
+  --color-fintech-rose-border: #fecdd3;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+/* Base resets & typography */
+@layer base {
+  * {
+    border-color: var(--color-brand-border);
+  }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  body {
+    background-color: var(--color-brand-surface);
+    color: var(--color-brand-ink);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Ensure numeric figures align cleanly in ledgers and receipts */
+  .font-mono,
+  table td {
+    font-variant-numeric: tabular-nums;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Custom UI utilities */
+@layer utilities {
+  /* Safe area inset for modern mobile bottom navigation bars */
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0.5rem);
+  }
+
+  /* Utility to hide visible scrollbars while maintaining scroll functionality */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
