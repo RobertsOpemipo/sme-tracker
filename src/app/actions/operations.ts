@@ -157,28 +157,38 @@ export async function processRestock(payload: RestockItemPayload) {
 // ----------------------------------------------------
 // 3. DAILY CASHIER RECONCILIATION (Z-Report)
 // ----------------------------------------------------
-// src/app/actions/operations.ts
-
 export async function getDailyShiftTotals(businessId: string, dateStr?: string) {
-  const baseDate = dateStr ? new Date(dateStr) : new Date();
+  // Parse target date or fallback to now
+  let baseDate: Date;
 
-  // Create two distinct Date objects to avoid in-place mutation bugs
-  const dayStart = new Date(baseDate);
-  dayStart.setHours(0, 0, 0, 0);
+  if (dateStr) {
+    // If dateStr is YYYY-MM-DD
+    const [year, month, day] = dateStr.split("-").map(Number);
+    baseDate = new Date(year, month - 1, day);
+  } else {
+    baseDate = new Date();
+  }
 
-  const dayEnd = new Date(baseDate);
-  dayEnd.setHours(23, 59, 59, 999);
+  // Create generous 24-hour boundary for the day
+  const dayStart = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 0, 0, 0, 0);
+  const dayEnd = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), 23, 59, 59, 999);
 
   const [sales, debtPayments] = await Promise.all([
     db.sale.findMany({
       where: {
         businessId,
-        createdAt: { gte: dayStart, lte: dayEnd },
+        createdAt: {
+          gte: dayStart,
+          lte: dayEnd,
+        },
       },
     }),
     db.debtPayment.findMany({
       where: {
-        paidAt: { gte: dayStart, lte: dayEnd },
+        paidAt: {
+          gte: dayStart,
+          lte: dayEnd,
+        },
       },
     }),
   ]);
@@ -202,6 +212,7 @@ export async function getDailyShiftTotals(businessId: string, dateStr?: string) 
   });
 
   return {
+    date: dayStart.toISOString().split("T")[0],
     salesCount: sales.length,
     debtPaymentsCount: debtPayments.length,
     expectedCash,
