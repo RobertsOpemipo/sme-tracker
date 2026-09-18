@@ -2,8 +2,10 @@
 import { db } from "@/lib/db";
 import { formatCurrency } from "@/lib/utils";
 import { RestockModal } from "@/components/inventory/RestockModal";
-import { Package, AlertTriangle, CheckCircle2, Layers } from "lucide-react";
+import { AddProductDialog } from "@/components/inventory/AddProductDialog";
+import { Package, AlertTriangle, CheckCircle2 } from "lucide-react";
 
+export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function InventoryPage() {
@@ -17,6 +19,7 @@ export default async function InventoryPage() {
     }),
     db.category.findMany({
       where: { businessId: business?.id },
+      orderBy: { name: "asc" },
     }),
   ]);
 
@@ -32,7 +35,7 @@ export default async function InventoryPage() {
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Top Header */}
+      {/* ----------------- Top Header ----------------- */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-brand-border/80 pb-4">
         <div>
           <div className="flex items-center gap-2">
@@ -44,9 +47,14 @@ export default async function InventoryPage() {
             Inventory Management
           </h1>
         </div>
+
+        {/* Add Product Modal Button */}
+        <div className="flex items-center gap-2">
+          <AddProductDialog categories={categories} />
+        </div>
       </div>
 
-      {/* Metric Cards */}
+      {/* ----------------- Metric KPI Cards ----------------- */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
         <div className="bg-brand-card border border-brand-border p-4 rounded-2xl shadow-2xs">
           <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted block">
@@ -97,7 +105,7 @@ export default async function InventoryPage() {
         </div>
       </div>
 
-      {/* Products Table with Restock Actions */}
+      {/* ----------------- Products Table ----------------- */}
       <div className="bg-brand-card border border-brand-border rounded-2xl p-5 shadow-2xs space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-bold text-brand-ink">Product Warehouse Roster</h2>
@@ -122,7 +130,7 @@ export default async function InventoryPage() {
               {products.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-8 text-center text-brand-muted">
-                    No products found in inventory.
+                    No products found in inventory. Tap &quot;Add New Product&quot; above to create one.
                   </td>
                 </tr>
               ) : (
