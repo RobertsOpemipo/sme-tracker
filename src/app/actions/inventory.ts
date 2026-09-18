@@ -19,50 +19,63 @@ async function getOrCreateDefaultBusiness() {
   return business;
 }
 
+async function getActiveBusinessId() {
+  const business = await db.business.findFirst();
+  if (business) return business.id;
+
+  const created = await db.business.create({
+    data: {
+      name: "Apex Supermart & Provisions",
+      currency: "NGN",
+    },
+  });
+  return created.id;
+}
+
 export async function getCategories() {
-  const business = await getOrCreateDefaultBusiness();
+  const businessId = await getActiveBusinessId();
   return await db.category.findMany({
-    where: { businessId: business.id },
+    where: { businessId },
     orderBy: { name: "asc" },
   });
 }
 
 export async function getInventoryProducts() {
-  const business = await getOrCreateDefaultBusiness();
+  const businessId = await getActiveBusinessId();
   return await db.product.findMany({
-    where: { businessId: business.id },
+    where: { businessId },
     include: { categoryRel: true },
     orderBy: { createdAt: "desc" },
   });
 }
 
 export async function createProduct(formData: FormData) {
-  const business = await getOrCreateDefaultBusiness();
-
-  const categoryId = (formData.get("categoryId") as string) || null;
-  const categoryName = (formData.get("category") as string) || null;
-
-  const rawData = {
-    name: formData.get("name") as string,
-    sku: (formData.get("sku") as string) || null,
-    category: categoryName,
-    costPrice: parseFloat(formData.get("costPrice") as string),
-    sellingPrice: parseFloat(formData.get("sellingPrice") as string),
-    currentStock: parseInt(formData.get("currentStock") as string, 10) || 0,
-    minStockAlert: parseInt(formData.get("minStockAlert") as string, 10) || 5,
-  };
-
-  const parsed = productSchema.safeParse(rawData);
-  if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0].message };
-  }
-
   try {
+    const businessId = await getActiveBusinessId();
+
+    const categoryId = (formData.get("categoryId") as string) || null;
+    const categoryName = (formData.get("category") as string) || null;
+
+    const rawData = {
+      name: formData.get("name") as string,
+      sku: (formData.get("sku") as string) || null,
+      category: categoryName,
+      costPrice: parseFloat(formData.get("costPrice") as string),
+      sellingPrice: parseFloat(formData.get("sellingPrice") as string),
+      currentStock: parseInt(formData.get("currentStock") as string, 10) || 0,
+      minStockAlert: parseInt(formData.get("minStockAlert") as string, 10) || 5,
+    };
+
+    const parsed = productSchema.safeParse(rawData);
+    if (!parsed.success) {
+      return { success: false, error: parsed.error.issues[0].message };
+    }
+
     await db.$transaction(async (tx: Prisma.TransactionClient) => {
       const product = await tx.product.create({
         data: {
-          businessId: business.id,
-          categoryId: categoryId,
+          businessId,
+          categoryId,
           ...parsed.data,
         },
       });
@@ -81,7 +94,9 @@ export async function createProduct(formData: FormData) {
 
     revalidatePath("/dashboard/inventory");
     revalidatePath("/dashboard/sales");
+    revalidatePath("/dashboard/analytics");
     revalidatePath("/dashboard");
+
     return { success: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to create product";

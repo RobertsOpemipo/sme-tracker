@@ -2,19 +2,21 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, X, Loader2, HelpCircle } from "lucide-react";
 import { createProduct } from "@/app/actions/inventory";
+import { ToastNotification } from "@/components/ui/ToastNotification";
 import type { Category } from "@prisma/client";
 
-// 1. Declare the props interface
 interface AddProductDialogProps {
   categories: Category[];
 }
 
-// 2. Accept categories in the function arguments
 export function AddProductDialog({ categories }: AddProductDialogProps) {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const [selectedCatId, setSelectedCatId] = useState(categories[0]?.id || "");
@@ -55,6 +57,8 @@ export function AddProductDialog({ categories }: AddProductDialogProps) {
         form.reset();
         setIsCustomCategory(false);
         setCustomName("");
+        setToastMessage("Product created and added to inventory!");
+        router.refresh();
       } else {
         setError(result.error || "Something went wrong");
       }
@@ -63,20 +67,30 @@ export function AddProductDialog({ categories }: AddProductDialogProps) {
 
   return (
     <>
+      {toastMessage && (
+        <ToastNotification
+          message={toastMessage}
+          type="success"
+          onClose={() => setToastMessage(null)}
+        />
+      )}
+
       <button
+        type="button"
         onClick={() => setIsOpen(true)}
-        className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-semibold transition"
+        className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-xs font-bold transition shadow-xs"
       >
-        <Plus className="w-4 h-4" />
+        <Plus className="w-3.5 h-3.5" />
         Add New Product
       </button>
 
       {isOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden border border-slate-200">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-slate-200">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <h3 className="font-bold text-slate-900 text-base">Add New Inventory Item</h3>
+              <h3 className="font-bold text-slate-900 text-sm">Add New Inventory Item</h3>
               <button
+                type="button"
                 onClick={() => setIsOpen(false)}
                 className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100"
               >
@@ -86,7 +100,7 @@ export function AddProductDialog({ categories }: AddProductDialogProps) {
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               {error && (
-                <div className="p-3 bg-rose-50 text-rose-600 border border-rose-200 rounded-lg text-xs">
+                <div className="p-3 bg-rose-50 text-rose-600 border border-rose-200 rounded-lg text-xs font-bold">
                   {error}
                 </div>
               )}
@@ -97,7 +111,7 @@ export function AddProductDialog({ categories }: AddProductDialogProps) {
                   required
                   name="name"
                   placeholder="e.g. 50kg Royal Basmati Rice"
-                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-900"
+                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900 font-medium"
                 />
               </div>
 
@@ -107,7 +121,7 @@ export function AddProductDialog({ categories }: AddProductDialogProps) {
                   <select
                     value={isCustomCategory ? "CUSTOM" : selectedCatId}
                     onChange={handleCategoryChange}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-900"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-slate-900"
                   >
                     {categories.map((cat) => (
                       <option key={cat.id} value={cat.id}>
@@ -133,7 +147,7 @@ export function AddProductDialog({ categories }: AddProductDialogProps) {
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-semibold text-slate-700">SKU / Item Code</label>
                     <span
-                      title="Stock Keeping Unit: Store identifier for fast lookups or barcode scanning"
+                      title="Stock Keeping Unit identifier"
                       className="cursor-help text-slate-400 hover:text-slate-600"
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
@@ -142,12 +156,12 @@ export function AddProductDialog({ categories }: AddProductDialogProps) {
                   <input
                     name="sku"
                     placeholder="e.g. RICE-50KG (Optional)"
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-900"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-slate-900 font-mono"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-lg border border-slate-200">
+              <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-xl border border-slate-200">
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-slate-700">Cost Price (COGS) *</label>
                   <input
@@ -156,7 +170,7 @@ export function AddProductDialog({ categories }: AddProductDialogProps) {
                     step="0.01"
                     name="costPrice"
                     placeholder="Cost from supplier"
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-900"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:ring-1 focus:ring-slate-900"
                   />
                 </div>
                 <div className="space-y-1">
@@ -166,8 +180,8 @@ export function AddProductDialog({ categories }: AddProductDialogProps) {
                     type="number"
                     step="0.01"
                     name="sellingPrice"
-                    placeholder="Price charged to customer"
-                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-900"
+                    placeholder="Retail price"
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono font-bold focus:outline-none focus:ring-1 focus:ring-slate-900"
                   />
                 </div>
               </div>
@@ -180,7 +194,7 @@ export function AddProductDialog({ categories }: AddProductDialogProps) {
                     type="number"
                     name="currentStock"
                     defaultValue={0}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-900"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-slate-900"
                   />
                 </div>
                 <div className="space-y-1">
@@ -189,23 +203,23 @@ export function AddProductDialog({ categories }: AddProductDialogProps) {
                     type="number"
                     name="minStockAlert"
                     defaultValue={5}
-                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-slate-900"
+                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-slate-900"
                   />
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
+              <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsOpen(false)}
-                  className="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  className="px-3 py-2 border border-slate-300 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isPending}
-                  className="inline-flex items-center gap-1.5 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs disabled:opacity-50 transition"
                 >
                   {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                   Save Product

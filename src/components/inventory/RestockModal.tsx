@@ -2,23 +2,26 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { processRestock } from "@/app/actions/operations";
 import { formatCurrency } from "@/lib/utils";
-import { PlusCircle, Loader2, X, AlertCircle } from "lucide-react";
+import { ToastNotification } from "@/components/ui/ToastNotification";
+import { PlusCircle, Loader2, X } from "lucide-react";
 
 export function RestockModal({
   product,
 }: {
   product: { id: string; name: string; costPrice: number; currentStock: number; sellingPrice: number };
 }) {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [quantity, setQuantity] = useState("10");
   const [newBuyingCost, setNewBuyingCost] = useState(product.costPrice.toString());
   const [newSellingPrice, setNewSellingPrice] = useState(product.sellingPrice.toString());
   const [note, setNote] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  // Live preview of weighted average cost
   const qty = parseInt(quantity, 10) || 0;
   const cost = parseFloat(newBuyingCost) || 0;
   const totalUnits = product.currentStock + qty;
@@ -40,6 +43,8 @@ export function RestockModal({
 
       if (res.success) {
         setIsOpen(false);
+        setToastMessage(`Restocked ${qty} units of ${product.name}!`);
+        router.refresh();
       } else {
         alert(res.error || "Restock failed");
       }
@@ -48,7 +53,16 @@ export function RestockModal({
 
   return (
     <>
+      {toastMessage && (
+        <ToastNotification
+          message={toastMessage}
+          type="success"
+          onClose={() => setToastMessage(null)}
+        />
+      )}
+
       <button
+        type="button"
         onClick={() => setIsOpen(true)}
         className="px-2.5 py-1.5 bg-brand-surface hover:bg-slate-200 border border-brand-border rounded-lg text-xs font-bold text-brand-ink flex items-center gap-1 transition"
       >
@@ -63,7 +77,11 @@ export function RestockModal({
                 <h3 className="text-sm font-bold text-brand-ink">Restock Consignment Intake</h3>
                 <p className="text-xs text-brand-muted truncate max-w-xs">{product.name}</p>
               </div>
-              <button onClick={() => setIsOpen(false)} className="text-brand-muted hover:text-brand-ink">
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="text-brand-muted hover:text-brand-ink"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -99,7 +117,6 @@ export function RestockModal({
                 </div>
               </div>
 
-              {/* COGS Recalculation Alert */}
               <div className="p-2.5 rounded-xl bg-brand-surface border border-brand-border space-y-1">
                 <div className="flex justify-between">
                   <span className="text-brand-muted">Current Shelf COGS:</span>

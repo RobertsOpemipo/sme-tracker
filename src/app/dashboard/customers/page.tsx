@@ -4,6 +4,7 @@ import { formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 import { ArrowUpRight, Download, Users, UserPlus } from "lucide-react";
 import { AddCustomerModal } from "@/components/customers/AddCustomerModal";
+import { ExportCsvButton } from "@/components/ui/ExportCsvButton";
 
 export const revalidate = 0;
 
@@ -40,14 +41,7 @@ export default async function CustomersPage() {
 
         {/* Actions Deck */}
         <div className="flex flex-wrap items-center gap-2">
-          <a
-            href="/api/export/sales"
-            download
-            className="px-3 py-1.5 bg-brand-surface hover:bg-slate-200 border border-brand-border text-brand-ink text-xs font-bold rounded-xl transition flex items-center gap-1.5"
-          >
-            <Download className="w-3.5 h-3.5 text-brand-muted" />
-            <span>Export CSV</span>
-          </a>
+          <ExportCsvButton label="Export CSV" />
           <AddCustomerModal businessId={business?.id || ""} />
         </div>
       </div>

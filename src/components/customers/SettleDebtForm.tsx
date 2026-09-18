@@ -2,9 +2,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { settleCustomerDebt } from "@/app/actions/operations";
+import { ToastNotification } from "@/components/ui/ToastNotification";
 import { PaymentMethod } from "@prisma/client";
-import { Loader2, DollarSign } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 export function SettleDebtForm({
   customerId,
@@ -13,10 +15,12 @@ export function SettleDebtForm({
   customerId: string;
   maxOwed: number;
 }) {
+  const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [amount, setAmount] = useState(maxOwed.toString());
   const [method, setMethod] = useState<PaymentMethod>(PaymentMethod.CASH);
   const [note, setNote] = useState("");
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const handleSettle = (e: React.FormEvent) => {
@@ -33,70 +37,81 @@ export function SettleDebtForm({
       });
       if (res.success) {
         setIsOpen(false);
+        setToastMessage(`Settlement of ₦${numeric.toLocaleString()} recorded successfully!`);
+        router.refresh();
       } else {
         alert(res.error || "Payment failed");
       }
     });
   };
 
-  if (!isOpen) {
-    return (
-      <button
-        onClick={() => setIsOpen(true)}
-        className="px-4 py-2.5 bg-fintech-mint text-white text-xs font-bold rounded-xl shadow-xs hover:bg-emerald-600 transition"
-      >
-        Record Debt Clearance
-      </button>
-    );
-  }
-
   return (
-    <form onSubmit={handleSettle} className="p-3 bg-white border border-brand-border rounded-xl shadow-md space-y-2">
-      <div className="text-xs font-bold text-brand-ink">Clear Account Balance</div>
-      <div className="flex gap-2">
-        <input
-          type="number"
-          step="0.01"
-          max={maxOwed}
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          placeholder="Amount"
-          className="w-28 px-2 py-1 text-xs font-mono border border-brand-border rounded-lg"
-          required
+    <>
+      {toastMessage && (
+        <ToastNotification
+          message={toastMessage}
+          type="success"
+          onClose={() => setToastMessage(null)}
         />
-        <select
-          value={method}
-          onChange={(e) => setMethod(e.target.value as PaymentMethod)}
-          className="px-2 py-1 text-xs border border-brand-border rounded-lg bg-white"
-        >
-          <option value="CASH">Cash</option>
-          <option value="TRANSFER">Transfer</option>
-          <option value="POS">POS</option>
-        </select>
-      </div>
-      <input
-        type="text"
-        placeholder="Memo / Bank Ref"
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        className="w-full px-2 py-1 text-xs border border-brand-border rounded-lg"
-      />
-      <div className="flex justify-end gap-1.5 pt-1">
+      )}
+
+      {!isOpen ? (
         <button
           type="button"
-          onClick={() => setIsOpen(false)}
-          className="px-2.5 py-1 text-xs text-brand-muted hover:text-brand-ink"
+          onClick={() => setIsOpen(true)}
+          className="px-4 py-2.5 bg-fintech-mint text-white text-xs font-bold rounded-xl shadow-xs hover:bg-emerald-600 transition"
         >
-          Cancel
+          Record Debt Clearance
         </button>
-        <button
-          type="submit"
-          disabled={isPending}
-          className="px-3 py-1 bg-brand-ink text-white text-xs font-bold rounded-lg disabled:opacity-50"
-        >
-          {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Post"}
-        </button>
-      </div>
-    </form>
+      ) : (
+        <form onSubmit={handleSettle} className="p-3 bg-white border border-brand-border rounded-xl shadow-md space-y-2">
+          <div className="text-xs font-bold text-brand-ink">Clear Account Balance</div>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              step="0.01"
+              max={maxOwed}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="Amount"
+              className="w-28 px-2 py-1 text-xs font-mono border border-brand-border rounded-lg"
+              required
+            />
+            <select
+              value={method}
+              onChange={(e) => setMethod(e.target.value as PaymentMethod)}
+              className="px-2 py-1 text-xs border border-brand-border rounded-lg bg-white"
+            >
+              <option value="CASH">Cash</option>
+              <option value="TRANSFER">Transfer</option>
+              <option value="POS">POS</option>
+            </select>
+          </div>
+          <input
+            type="text"
+            placeholder="Memo / Bank Ref"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className="w-full px-2 py-1 text-xs border border-brand-border rounded-lg"
+          />
+          <div className="flex justify-end gap-1.5 pt-1">
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              className="px-2.5 py-1 text-xs text-brand-muted hover:text-brand-ink"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isPending}
+              className="px-3 py-1 bg-brand-ink text-white text-xs font-bold rounded-lg disabled:opacity-50"
+            >
+              {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Post"}
+            </button>
+          </div>
+        </form>
+      )}
+    </>
   );
 }

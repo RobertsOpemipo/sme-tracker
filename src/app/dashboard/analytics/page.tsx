@@ -1,4 +1,5 @@
 // src/app/dashboard/analytics/page.tsx
+import { ExportCsvButton } from "@/components/ui/ExportCsvButton";
 import { db } from "@/lib/db";
 import { formatCurrency } from "@/lib/utils";
 import {
@@ -236,14 +237,7 @@ export default async function AnalyticsPage({
               Filter
             </button>
           </form>
-          <a
-            href="/api/export/sales"
-            download
-            className="px-3 py-1.5 bg-brand-surface hover:bg-slate-200 border border-brand-border text-brand-ink text-xs font-bold rounded-xl transition flex items-center gap-1.5"
-          >
-            <Download className="w-3.5 h-3.5 text-brand-muted" />
-            <span>Export CSV</span>
-          </a>
+          <ExportCsvButton label="Export CSV" />
         </div>
       </div>
 
