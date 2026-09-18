@@ -157,10 +157,17 @@ export async function processRestock(payload: RestockItemPayload) {
 // ----------------------------------------------------
 // 3. DAILY CASHIER RECONCILIATION (Z-Report)
 // ----------------------------------------------------
+// src/app/actions/operations.ts
+
 export async function getDailyShiftTotals(businessId: string, dateStr?: string) {
-  const targetDate = dateStr ? new Date(dateStr) : new Date();
-  const dayStart = new Date(targetDate.setHours(0, 0, 0, 0));
-  const dayEnd = new Date(targetDate.setHours(23, 59, 59, 999));
+  const baseDate = dateStr ? new Date(dateStr) : new Date();
+
+  // Create two distinct Date objects to avoid in-place mutation bugs
+  const dayStart = new Date(baseDate);
+  dayStart.setHours(0, 0, 0, 0);
+
+  const dayEnd = new Date(baseDate);
+  dayEnd.setHours(23, 59, 59, 999);
 
   const [sales, debtPayments] = await Promise.all([
     db.sale.findMany({
