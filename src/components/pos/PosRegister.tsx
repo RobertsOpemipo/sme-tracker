@@ -6,6 +6,10 @@ import { Product, Customer, Category } from "@prisma/client";
 import { processSale, CartItem, CheckoutPayload } from "@/app/actions/pos";
 import { formatCurrency } from "@/lib/utils";
 import {
+  ThermalReceiptModal,
+  ReceiptSaleItem,
+} from "@/components/receipts/ThermalReceiptModal";
+import {
   Search,
   Plus,
   Minus,
@@ -56,8 +60,20 @@ export function PosRegister({
   const [notes, setNotes] = useState("");
   const [showAdditionalMeta, setShowAdditionalMeta] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastReceipt, setLastReceipt] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Receipt modal state
+  const [completedSale, setCompletedSale] = useState<{
+    receiptNumber: string;
+    items: ReceiptSaleItem[];
+    subtotal: number;
+    discount: number;
+    totalAmount: number;
+    amountPaid: number;
+    balanceDue: number;
+    paymentMethod: string;
+    customerName?: string;
+  } | null>(null);
 
   // Search & category filtering
   const filteredProducts = useMemo(() => {
@@ -183,7 +199,22 @@ export function PosRegister({
     startTransition(async () => {
       const result = await processSale(payload);
       if (result.success && result.receiptNumber) {
-        setLastReceipt(result.receiptNumber);
+        setCompletedSale({
+          receiptNumber: result.receiptNumber,
+          items: cart.map((i) => ({
+            name: i.name,
+            quantity: i.quantity,
+            unitSellingPrice: i.sellingPrice,
+            totalRevenue: i.sellingPrice * i.quantity,
+          })),
+          subtotal,
+          discount,
+          totalAmount,
+          amountPaid: isCreditSale ? numericPaid : totalAmount,
+          balanceDue: remainingDebt,
+          paymentMethod,
+          customerName: selectedCustomer?.name,
+        });
         clearCart();
       } else {
         setError(result.error || "Transaction failed");
@@ -495,7 +526,7 @@ export function PosRegister({
               </div>
             </div>
 
-            {/* Credit Allocation Checkbox (Registered Accounts Only) */}
+            {/* Credit Allocation Checkbox */}
             {customerMode === "REGISTERED" && (
               <div className="p-2.5 bg-fintech-amber-light border border-fintech-amber-border rounded-xl space-y-1.5">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -612,23 +643,24 @@ export function PosRegister({
       </div>
 
       {/* ---------------------------------------------------- */}
-      {/* Toast Notification                                  */}
+      {/* Thermal Receipt Print Modal Overlay                 */}
       {/* ---------------------------------------------------- */}
-      {lastReceipt && (
-        <div className="fixed bottom-6 right-6 z-50 bg-brand-ink text-white p-3.5 rounded-2xl shadow-xl flex items-center gap-3 border border-slate-800 animate-in slide-in-from-bottom-5">
-          <CheckCircle2 className="w-5 h-5 text-fintech-mint shrink-0" />
-          <div className="text-xs">
-            <div className="font-bold">Transaction Successfully Completed</div>
-            <div className="text-slate-400 font-mono text-[11px] mt-0.5">Receipt: {lastReceipt}</div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setLastReceipt(null)}
-            className="ml-2 text-slate-400 hover:text-white p-1 rounded-md"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+      {completedSale && (
+        <ThermalReceiptModal
+          isOpen={!!completedSale}
+          onClose={() => setCompletedSale(null)}
+          receiptNumber={completedSale.receiptNumber}
+          date={new Date()}
+          businessName="Apex Retail Mart"
+          customerName={completedSale.customerName}
+          items={completedSale.items}
+          subtotal={completedSale.subtotal}
+          discount={completedSale.discount}
+          totalAmount={completedSale.totalAmount}
+          amountPaid={completedSale.amountPaid}
+          balanceDue={completedSale.balanceDue}
+          paymentMethod={completedSale.paymentMethod}
+        />
       )}
     </div>
   );

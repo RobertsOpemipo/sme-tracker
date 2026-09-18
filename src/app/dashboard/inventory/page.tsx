@@ -1,113 +1,181 @@
-import { getInventoryProducts, getCategories } from "@/app/actions/inventory";
-import { AddProductDialog } from "@/components/inventory/AddProductDialog";
-import { ProductRowActions } from "@/components/inventory/ProductRowActions";
+// src/app/dashboard/inventory/page.tsx
+import { db } from "@/lib/db";
 import { formatCurrency } from "@/lib/utils";
-import { calculateGrossMargin } from "@/lib/calculations";
-import { AlertCircle, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import { RestockModal } from "@/components/inventory/RestockModal";
+import { Package, AlertTriangle, CheckCircle2, Layers } from "lucide-react";
+
+export const revalidate = 0;
 
 export default async function InventoryPage() {
+  const business = await db.business.findFirst();
+
   const [products, categories] = await Promise.all([
-    getInventoryProducts(),
-    getCategories(),
+    db.product.findMany({
+      where: { businessId: business?.id },
+      include: { categoryRel: true },
+      orderBy: { name: "asc" },
+    }),
+    db.category.findMany({
+      where: { businessId: business?.id },
+    }),
   ]);
 
+  const totalSKUs = products.length;
+  const outOfStockCount = products.filter((p) => p.currentStock <= 0).length;
+  const lowStockCount = products.filter(
+    (p) => p.currentStock > 0 && p.currentStock <= p.minStockAlert
+  ).length;
+  const totalStockValue = products.reduce(
+    (acc, p) => acc + p.costPrice * p.currentStock,
+    0
+  );
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-6 pb-12">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-brand-border/80 pb-4">
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-slate-950">Inventory & Margins</h2>
-          <p className="text-sm text-slate-500">
-            Monitor stock levels, unit purchase costs, selling prices, and item profit margins.
-          </p>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted bg-brand-surface px-2 py-0.5 rounded-md border border-brand-border">
+              Merchandise &amp; Stock
+            </span>
+          </div>
+          <h1 className="text-xl sm:text-2xl font-black text-brand-ink mt-1">
+            Inventory Management
+          </h1>
         </div>
-        <AddProductDialog categories={categories} />
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+      {/* Metric Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div className="bg-brand-card border border-brand-border p-4 rounded-2xl shadow-2xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted block">
+            Catalog Coverage
+          </span>
+          <span className="mt-1 text-xl font-black font-mono text-brand-ink block">
+            {totalSKUs} Items
+          </span>
+          <span className="text-[11px] text-brand-muted mt-0.5 block">
+            Across {categories.length} categories
+          </span>
+        </div>
+
+        <div className="bg-brand-card border border-brand-border p-4 rounded-2xl shadow-2xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted block">
+            Capital Tied in Stock
+          </span>
+          <span className="mt-1 text-xl font-black font-mono text-brand-ink block">
+            {formatCurrency(totalStockValue)}
+          </span>
+          <span className="text-[11px] text-brand-muted mt-0.5 block">
+            At replacement buying cost
+          </span>
+        </div>
+
+        <div className="bg-brand-card border border-brand-border p-4 rounded-2xl shadow-2xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 block">
+            Low Stock Alerts
+          </span>
+          <span className="mt-1 text-xl font-black font-mono text-amber-700 block">
+            {lowStockCount} SKUs
+          </span>
+          <span className="text-[11px] text-brand-muted mt-0.5 block">
+            Below replenishment threshold
+          </span>
+        </div>
+
+        <div className="bg-brand-card border border-brand-border p-4 rounded-2xl shadow-2xs">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-fintech-rose block">
+            Depleted / Out of Stock
+          </span>
+          <span className="mt-1 text-xl font-black font-mono text-fintech-rose block">
+            {outOfStockCount} SKUs
+          </span>
+          <span className="text-[11px] text-brand-muted mt-0.5 block">
+            Immediate reorder needed
+          </span>
+        </div>
+      </div>
+
+      {/* Products Table with Restock Actions */}
+      <div className="bg-brand-card border border-brand-border rounded-2xl p-5 shadow-2xs space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-brand-ink">Product Warehouse Roster</h2>
+          <span className="text-xs font-mono font-bold text-brand-muted">
+            {products.length} Active Records
+          </span>
+        </div>
+
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50/75 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-              <tr>
-                <th className="px-6 py-3.5">Product Name</th>
-                <th className="px-6 py-3.5 whitespace-nowrap">Stock Level</th>
-                <th className="px-6 py-3.5 text-right whitespace-nowrap">Cost Price (COGS)</th>
-                <th className="px-6 py-3.5 text-right whitespace-nowrap">Selling Price</th>
-                <th className="px-6 py-3.5 text-right whitespace-nowrap">Unit Profit</th>
-                <th className="px-6 py-3.5 text-right whitespace-nowrap">Margin %</th>
-                <th className="px-6 py-3.5 text-right whitespace-nowrap">Actions</th>
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-brand-border text-[10px] font-bold uppercase tracking-wider text-brand-muted">
+                <th className="pb-2.5">Product</th>
+                <th className="pb-2.5">Category</th>
+                <th className="pb-2.5 text-right">Cost Price (COGS)</th>
+                <th className="pb-2.5 text-right">Retail Price</th>
+                <th className="pb-2.5 text-center">Stock Level</th>
+                <th className="pb-2.5 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-brand-border/60">
               {products.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
-                    No products added yet. Click &quot;Add New Product&quot; to begin tracking inventory and profit.
+                  <td colSpan={6} className="py-8 text-center text-brand-muted">
+                    No products found in inventory.
                   </td>
                 </tr>
               ) : (
                 products.map((product) => {
-                  const unitProfit = product.sellingPrice - product.costPrice;
-                  const marginPct = calculateGrossMargin(product.sellingPrice, product.costPrice).toFixed(1);
-                  const displayCategory = product.categoryRel?.name || product.category || "General Merchandise";
-
-                  // Threshold calculations
                   const isOutOfStock = product.currentStock <= 0;
-                  const isLowStock = product.currentStock <= product.minStockAlert;
-                  const moderateThreshold = Math.max(product.minStockAlert * 2, product.minStockAlert + 5);
-                  const isModerateStock = !isLowStock && product.currentStock <= moderateThreshold;
-
-                  // Dynamic color styling and label
-                  let badgeStyles = "bg-emerald-50 text-emerald-700 border-emerald-200";
-                  let Icon = CheckCircle2;
-                  let stockText = `${product.currentStock} units in stock`;
-
-                  if (isOutOfStock) {
-                    badgeStyles = "bg-rose-50 text-rose-700 border-rose-200";
-                    Icon = XCircle;
-                    stockText = "0 units (Out of stock)";
-                  } else if (isLowStock) {
-                    badgeStyles = "bg-rose-50 text-rose-700 border-rose-200";
-                    Icon = AlertCircle;
-                    stockText = `${product.currentStock} units (Low stock)`;
-                  } else if (isModerateStock) {
-                    badgeStyles = "bg-amber-50 text-amber-700 border-amber-200";
-                    Icon = AlertTriangle;
-                    stockText = `${product.currentStock} units (Medium)`;
-                  }
+                  const isLowStock =
+                    product.currentStock > 0 &&
+                    product.currentStock <= product.minStockAlert;
 
                   return (
-                    <tr key={product.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-4 font-medium text-slate-900">
-                        <div className="font-semibold">{product.name}</div>
-                        <div className="text-xs text-slate-400 font-normal">
-                          {displayCategory} {product.sku ? `• SKU: ${product.sku}` : ""}
-                        </div>
+                    <tr key={product.id} className="hover:bg-brand-surface/70 transition">
+                      <td className="py-3 font-bold text-brand-ink">
+                        <div className="truncate max-w-[220px]">{product.name}</div>
+                        {product.sku && (
+                          <span className="font-mono text-[10px] text-brand-muted block">
+                            {product.sku}
+                          </span>
+                        )}
                       </td>
-
-                      {/* Stock Level Column */}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border whitespace-nowrap ${badgeStyles}`}
-                        >
-                          <Icon className="w-3.5 h-3.5 shrink-0" />
-                          <span>{stockText}</span>
-                        </span>
+                      <td className="py-3 text-brand-muted">
+                        {product.categoryRel?.name || product.category || "General"}
                       </td>
-
-                      <td className="px-6 py-4 text-right tabular-nums text-slate-600 font-mono whitespace-nowrap">
+                      <td className="py-3 text-right font-mono text-slate-600">
                         {formatCurrency(product.costPrice)}
                       </td>
-                      <td className="px-6 py-4 text-right tabular-nums font-semibold text-slate-900 font-mono whitespace-nowrap">
+                      <td className="py-3 text-right font-mono font-bold text-brand-ink">
                         {formatCurrency(product.sellingPrice)}
                       </td>
-                      <td className="px-6 py-4 text-right tabular-nums font-semibold text-emerald-600 font-mono whitespace-nowrap">
-                        +{formatCurrency(unitProfit)}
+                      <td className="py-3 text-center">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${
+                            isOutOfStock
+                              ? "bg-fintech-rose-light text-fintech-rose border border-fintech-rose-border"
+                              : isLowStock
+                              ? "bg-fintech-amber-light text-amber-800 border border-fintech-amber-border"
+                              : "bg-fintech-mint-light text-emerald-800 border border-fintech-mint-border"
+                          }`}
+                        >
+                          {product.currentStock} units
+                        </span>
                       </td>
-                      <td className="px-6 py-4 text-right tabular-nums font-medium text-slate-700 font-mono whitespace-nowrap">
-                        {marginPct}%
-                      </td>
-                      <td className="px-6 py-4 text-right whitespace-nowrap">
-                        <ProductRowActions product={product} categories={categories} />
+                      <td className="py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <RestockModal
+                            product={{
+                              id: product.id,
+                              name: product.name,
+                              costPrice: product.costPrice,
+                              currentStock: product.currentStock,
+                              sellingPrice: product.sellingPrice,
+                            }}
+                          />
+                        </div>
                       </td>
                     </tr>
                   );

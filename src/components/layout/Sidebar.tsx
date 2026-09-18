@@ -11,18 +11,31 @@ import {
   Receipt,
   Users,
   BarChart3,
+  Scale,
+  Wallet,
   ChevronLeft,
   ChevronRight,
   Store,
 } from "lucide-react";
 
-const NAV_ITEMS = [
+// Full desktop navigation deck
+const DESKTOP_NAV_ITEMS = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
   { name: "Inventory", href: "/dashboard/inventory", icon: Package },
-  { name: "POS", href: "/dashboard/sales", icon: ShoppingCart },
-  { name: "History", href: "/dashboard/sales/history", icon: Receipt },
+  { name: "POS Terminal", href: "/dashboard/sales", icon: ShoppingCart },
   { name: "Debtors", href: "/dashboard/customers", icon: Users },
-  { name: "Reports", href: "/dashboard/analytics", icon: BarChart3 },
+  { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
+  { name: "Daily Z-Report", href: "/dashboard/reconciliation", icon: Scale },
+  { name: "Expenses", href: "/dashboard/expenses", icon: Wallet },
+];
+
+// Curated 5 items for the mobile bottom bar to prevent cramping
+const MOBILE_NAV_ITEMS = [
+  { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
+  { name: "POS", href: "/dashboard/sales", icon: ShoppingCart },
+  { name: "Stock", href: "/dashboard/inventory", icon: Package },
+  { name: "Debtors", href: "/dashboard/customers", icon: Users },
+  { name: "Z-Report", href: "/dashboard/reconciliation", icon: Scale },
 ];
 
 const STORAGE_KEY = "sme_sidebar_collapsed";
@@ -33,7 +46,7 @@ function subscribe(callback: () => void) {
 }
 
 function getSnapshot(): boolean {
-  return localStorage.getItem(STORAGE_KEY) === "true";
+  return typeof window !== "undefined" && localStorage.getItem(STORAGE_KEY) === "true";
 }
 
 function getServerSnapshot(): boolean {
@@ -59,10 +72,10 @@ export function Sidebar() {
   return (
     <>
       {/* ---------------------------------------------------- */}
-      {/* 1. MOBILE HORIZONTAL NAVIGATION (Bottom App Bar)     */}
+      {/* 1. MOBILE BOTTOM APP BAR (Phones & Handhelds)        */}
       {/* ---------------------------------------------------- */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-2 py-1.5 flex items-center justify-around shadow-lg safe-bottom">
-        {NAV_ITEMS.map((item) => {
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-1 py-1.5 flex items-center justify-around shadow-lg safe-bottom">
+        {MOBILE_NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive = isItemActive(item.href);
 
@@ -70,7 +83,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition text-[10px] font-semibold gap-1 min-w-[52px] ${
+              className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition text-[10px] font-semibold gap-1 min-w-[50px] ${
                 isActive
                   ? "text-slate-950 font-bold"
                   : "text-slate-400 hover:text-slate-700"
@@ -99,7 +112,7 @@ export function Sidebar() {
           collapsed ? "w-20" : "w-64"
         }`}
       >
-        {/* Retract Toggle */}
+        {/* Retract / Expand Toggle Button */}
         <button
           type="button"
           onClick={toggleSidebar}
@@ -128,9 +141,9 @@ export function Sidebar() {
           )}
         </div>
 
-        {/* Navigation Items */}
-        <div className="flex-1 p-3 space-y-1.5 overflow-y-auto overflow-x-hidden">
-          {NAV_ITEMS.map((item) => {
+        {/* Navigation Link Deck */}
+        <div className="flex-1 p-3 space-y-1 overflow-y-auto overflow-x-hidden">
+          {DESKTOP_NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = isItemActive(item.href);
 
@@ -154,7 +167,7 @@ export function Sidebar() {
 
                 {!collapsed && <span className="truncate">{item.name}</span>}
 
-                {/* Flyout tooltip for mini-mode */}
+                {/* Flyout Tooltip on Hover in Collapsed Mode */}
                 {collapsed && (
                   <span className="pointer-events-none absolute left-full ml-3 z-50 whitespace-nowrap rounded-md bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">
                     {item.name}
@@ -165,7 +178,7 @@ export function Sidebar() {
           })}
         </div>
 
-        {/* User Footer Profile */}
+        {/* Footer Admin Node */}
         <div className="p-3 border-t border-slate-100 shrink-0 overflow-hidden">
           <div
             className={`flex items-center gap-3 p-2 rounded-xl bg-slate-50 border border-slate-200/60 ${
