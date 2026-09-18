@@ -16,6 +16,7 @@ import {
   Receipt,
   Calendar,
   Wallet,
+  Download
 } from "lucide-react";
 
 export const revalidate = 0;
@@ -235,6 +236,14 @@ export default async function AnalyticsPage({
               Filter
             </button>
           </form>
+          <a
+            href="/api/export/sales"
+            download
+            className="px-3 py-1.5 bg-brand-surface hover:bg-slate-200 border border-brand-border text-brand-ink text-xs font-bold rounded-xl transition flex items-center gap-1.5"
+          >
+            <Download className="w-3.5 h-3.5 text-brand-muted" />
+            <span>Export CSV</span>
+          </a>
         </div>
       </div>
 
