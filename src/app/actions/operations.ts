@@ -204,3 +204,35 @@ export async function getDailyShiftTotals(businessId: string, dateStr?: string) 
     totalExpectedDrawerCash: expectedCash,
   };
 }
+export async function createCustomer(payload: {
+  businessId: string;
+  name: string;
+  phone: string;
+  email?: string;
+}) {
+  try {
+    const { businessId, name, phone, email } = payload;
+    if (!name.trim() || !phone.trim()) {
+      return { success: false, error: "Name and phone number are required." };
+    }
+
+    await db.customer.create({
+      data: {
+        businessId,
+        name: name.trim(),
+        phone: phone.trim(),
+        email: email?.trim() || null,
+        totalOwed: 0,
+      },
+    });
+
+    revalidatePath("/dashboard/customers");
+    revalidatePath("/dashboard/sales");
+    return { success: true };
+  } catch (err: unknown) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to create customer.",
+    };
+  }
+}

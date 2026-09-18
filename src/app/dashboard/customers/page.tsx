@@ -2,7 +2,8 @@
 import { db } from "@/lib/db";
 import { formatCurrency } from "@/lib/utils";
 import Link from "next/link";
-import { Users, Phone, ArrowUpRight, ShieldAlert, CheckCircle2 } from "lucide-react";
+import { ArrowUpRight, Download, Users, UserPlus } from "lucide-react";
+import { AddCustomerModal } from "@/components/customers/AddCustomerModal";
 
 export const revalidate = 0;
 
@@ -35,6 +36,19 @@ export default async function CustomersPage() {
           <h1 className="text-xl sm:text-2xl font-black text-brand-ink mt-1">
             Customer Credit Ledger
           </h1>
+        </div>
+
+        {/* Actions Deck */}
+        <div className="flex flex-wrap items-center gap-2">
+          <a
+            href="/api/export/sales"
+            download
+            className="px-3 py-1.5 bg-brand-surface hover:bg-slate-200 border border-brand-border text-brand-ink text-xs font-bold rounded-xl transition flex items-center gap-1.5"
+          >
+            <Download className="w-3.5 h-3.5 text-brand-muted" />
+            <span>Export CSV</span>
+          </a>
+          <AddCustomerModal businessId={business?.id || ""} />
         </div>
       </div>
 

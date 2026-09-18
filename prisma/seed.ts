@@ -121,7 +121,7 @@ async function main() {
         barcode: "6151100000404",
         costPrice: 1750,
         sellingPrice: 2200,
-        currentStock: 4, // LOW STOCK
+        currentStock: 4,
         minStockAlert: 10,
         category: beverages.name,
         categoryId: beverages.id,
@@ -137,7 +137,7 @@ async function main() {
         barcode: "5000127000505",
         costPrice: 2500,
         sellingPrice: 3200,
-        currentStock: 7, // LOW STOCK
+        currentStock: 7,
         minStockAlert: 10,
         category: provisions.name,
         categoryId: provisions.id,
@@ -179,7 +179,7 @@ async function main() {
         barcode: "6151100000808",
         costPrice: 820,
         sellingPrice: 1050,
-        currentStock: 0, // OUT OF STOCK
+        currentStock: 0,
         minStockAlert: 15,
         category: provisions.name,
         categoryId: provisions.id,
@@ -237,7 +237,7 @@ async function main() {
         barcode: "5053990001212",
         costPrice: 2600,
         sellingPrice: 3400,
-        currentStock: 2, // CRITICAL STOCK
+        currentStock: 2,
         minStockAlert: 6,
         category: snacks.name,
         categoryId: snacks.id,
@@ -323,7 +323,7 @@ async function main() {
         phone: "+2348029988776",
         email: "chioma.okonjo@example.ng",
         businessId: business.id,
-        totalOwed: 14200,
+        totalOwed: 9200,
       },
     }),
     prisma.customer.create({
@@ -331,7 +331,7 @@ async function main() {
         name: "Dr. Babatunde Adeleke",
         phone: "+2348187766554",
         businessId: business.id,
-        totalOwed: 0, // Clean
+        totalOwed: 0,
       },
     }),
     prisma.customer.create({
@@ -340,7 +340,7 @@ async function main() {
         phone: "+2348054433221",
         email: "canteen.mamafunke@gmail.com",
         businessId: business.id,
-        totalOwed: 45000, // High-balance commercial debtor
+        totalOwed: 45000,
       },
     }),
     prisma.customer.create({
@@ -356,17 +356,27 @@ async function main() {
         name: "Amina Yusuf",
         phone: "+2348123344556",
         businessId: business.id,
-        totalOwed: 0, // Clean
+        totalOwed: 0,
       },
     }),
   ]);
 
-  console.log("🧾 Creating historical sales transactions...");
-  // Sale 1: Walk-in Quick Cash Checkout
+  // Dynamic date helpers to guarantee Daily Reconciliation is populated today
+  const now = new Date();
+  const todayMorning = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 30, 0);
+  const todayNoon = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 13, 15, 0);
+  const todayAfternoon = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 16, 45, 0);
+  const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+  const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+  const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+
+  console.log("🧾 Creating historical and TODAY's sales transactions...");
+
+  // Sale 1: Historical Walk-in Cash Sale
   await prisma.sale.create({
     data: {
       businessId: business.id,
-      receiptNumber: "REC-20260910-1011",
+      receiptNumber: "REC-HIST-1011",
       subtotal: 3950,
       discount: 150,
       totalAmount: 3800,
@@ -374,7 +384,7 @@ async function main() {
       balanceDue: 0,
       paymentMethod: PaymentMethod.CASH,
       paymentStatus: PaymentStatus.PAID,
-      createdAt: new Date("2026-09-10T10:14:00Z"),
+      createdAt: eightDaysAgo,
       items: {
         create: [
           {
@@ -400,126 +410,21 @@ async function main() {
     },
   });
 
-  // Sale 2: POS Card Payment
-  await prisma.sale.create({
-    data: {
-      businessId: business.id,
-      receiptNumber: "REC-20260911-1402",
-      subtotal: 10800,
-      discount: 300,
-      totalAmount: 10500,
-      amountPaid: 10500,
-      balanceDue: 0,
-      paymentMethod: PaymentMethod.POS,
-      paymentStatus: PaymentStatus.PAID,
-      notes: "Stanbic POS Terminal Ref: 981042",
-      createdAt: new Date("2026-09-11T13:40:00Z"),
-      items: {
-        create: [
-          {
-            productId: products[1].id, // Milo 500g
-            quantity: 2,
-            unitCostPrice: 2150,
-            unitSellingPrice: 2700,
-            totalCostPrice: 4300,
-            totalRevenue: 5400,
-            grossProfit: 1100,
-          },
-          {
-            productId: products[4].id, // Corn Flakes
-            quantity: 1,
-            unitCostPrice: 2500,
-            unitSellingPrice: 3200,
-            totalCostPrice: 2500,
-            totalRevenue: 3200,
-            grossProfit: 700,
-          },
-          {
-            productId: products[13].id, // Sunlight detergent
-            quantity: 1,
-            unitCostPrice: 1550,
-            unitSellingPrice: 2000,
-            totalCostPrice: 1550,
-            totalRevenue: 2000,
-            grossProfit: 450,
-          },
-          {
-            productId: products[10].id, // Chinchin
-            quantity: 1,
-            unitCostPrice: 160,
-            unitSellingPrice: 200,
-            totalCostPrice: 160,
-            totalRevenue: 200,
-            grossProfit: 40,
-          },
-        ],
-      },
-    },
-  });
-
-  // Sale 3: Bank Transfer Payment
-  await prisma.sale.create({
-    data: {
-      businessId: business.id,
-      receiptNumber: "REC-20260912-1644",
-      subtotal: 14750,
-      discount: 0,
-      totalAmount: 14750,
-      amountPaid: 14750,
-      balanceDue: 0,
-      paymentMethod: PaymentMethod.TRANSFER,
-      paymentStatus: PaymentStatus.PAID,
-      notes: "GTBank instant transfer confirmed",
-      createdAt: new Date("2026-09-12T16:22:00Z"),
-      items: {
-        create: [
-          {
-            productId: products[6].id, // Devon King's Oil
-            quantity: 3,
-            unitCostPrice: 2900,
-            unitSellingPrice: 3500,
-            totalCostPrice: 8700,
-            totalRevenue: 10500,
-            grossProfit: 1800,
-          },
-          {
-            productId: products[12].id, // Dettol
-            quantity: 1,
-            unitCostPrice: 1700,
-            unitSellingPrice: 2250,
-            totalCostPrice: 1700,
-            totalRevenue: 2250,
-            grossProfit: 550,
-          },
-          {
-            productId: products[9].id, // Digestives
-            quantity: 2,
-            unitCostPrice: 780,
-            unitSellingPrice: 1000,
-            totalCostPrice: 1560,
-            totalRevenue: 2000,
-            grossProfit: 440,
-          },
-        ],
-      },
-    },
-  });
-
-  // Sale 4: Partial Credit Sale (Alhaji Musa Ibrahim)
+  // Sale 2: Historical Credit Sale (Alhaji Musa)
   await prisma.sale.create({
     data: {
       businessId: business.id,
       customerId: cust1.id,
-      receiptNumber: "REC-20260913-2015",
+      receiptNumber: "REC-HIST-2015",
       subtotal: 38650,
       discount: 0,
       totalAmount: 38650,
-      amountPaid: 10000, // Partial payment
+      amountPaid: 10000,
       balanceDue: 28650,
       paymentMethod: PaymentMethod.TRANSFER,
       paymentStatus: PaymentStatus.PARTIAL,
-      notes: "Initial deposit ₦10,000 paid via transfer; balance scheduled for 28th",
-      createdAt: new Date("2026-09-13T11:05:00Z"),
+      notes: "Deposit ₦10k paid via transfer; balance scheduled",
+      createdAt: fiveDaysAgo,
       items: {
         create: [
           {
@@ -540,14 +445,137 @@ async function main() {
             totalRevenue: 14000,
             grossProfit: 2400,
           },
+        ],
+      },
+    },
+  });
+
+  // Sale 3: Historical Wholesale Carton Order (Mama Funke)
+  await prisma.sale.create({
+    data: {
+      businessId: business.id,
+      customerId: cust4.id,
+      receiptNumber: "REC-HIST-0830",
+      subtotal: 55000,
+      discount: 0,
+      totalAmount: 55000,
+      amountPaid: 10000,
+      balanceDue: 45000,
+      paymentMethod: PaymentMethod.CASH,
+      paymentStatus: PaymentStatus.PARTIAL,
+      notes: "Commercial bulk provision supply",
+      createdAt: twoDaysAgo,
+      items: {
+        create: [
+          {
+            productId: products[8].id, // Indomie
+            quantity: 100,
+            unitCostPrice: 310,
+            unitSellingPrice: 380,
+            totalCostPrice: 31000,
+            totalRevenue: 38000,
+            grossProfit: 7000,
+          },
+        ],
+      },
+    },
+  });
+
+  // ----------------------------------------------------------------
+  // TODAY'S SHIFT SALES (Powers the Daily Reconciliation Z-Report)
+  // ----------------------------------------------------------------
+
+  // Today Sale A: Morning Till Cash Sale
+  await prisma.sale.create({
+    data: {
+      businessId: business.id,
+      receiptNumber: `REC-${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, "0")}${now.getDate().toString().padStart(2, "0")}-0101`,
+      subtotal: 13500,
+      discount: 500,
+      totalAmount: 13000,
+      amountPaid: 13000, // +₦13,000 Expected Cash in Drawer
+      balanceDue: 0,
+      paymentMethod: PaymentMethod.CASH,
+      paymentStatus: PaymentStatus.PAID,
+      notes: "Morning walk-in breakfast provisions",
+      createdAt: todayMorning,
+      items: {
+        create: [
           {
             productId: products[1].id, // Milo 500g
-            quantity: 2,
+            quantity: 3,
             unitCostPrice: 2150,
             unitSellingPrice: 2700,
-            totalCostPrice: 4300,
-            totalRevenue: 5400,
-            grossProfit: 1100,
+            totalCostPrice: 6450,
+            totalRevenue: 8100,
+            grossProfit: 1650,
+          },
+          {
+            productId: products[4].id, // Corn Flakes
+            quantity: 1,
+            unitCostPrice: 2500,
+            unitSellingPrice: 3200,
+            totalCostPrice: 2500,
+            totalRevenue: 3200,
+            grossProfit: 700,
+          },
+          {
+            productId: products[0].id, // Milk
+            quantity: 4,
+            unitCostPrice: 430,
+            unitSellingPrice: 550,
+            totalCostPrice: 1720,
+            totalRevenue: 2200,
+            grossProfit: 480,
+          },
+        ],
+      },
+    },
+  });
+
+  // Today Sale B: Midday POS Terminal Card Swipe
+  await prisma.sale.create({
+    data: {
+      businessId: business.id,
+      customerId: cust3.id, // Dr. Babatunde
+      receiptNumber: `REC-${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, "0")}${now.getDate().toString().padStart(2, "0")}-0202`,
+      subtotal: 21650,
+      discount: 0,
+      totalAmount: 21650,
+      amountPaid: 21650, // +₦21,650 Expected POS Settlement
+      balanceDue: 0,
+      paymentMethod: PaymentMethod.POS,
+      paymentStatus: PaymentStatus.PAID,
+      notes: "Stanbic POS Terminal Auth #551982",
+      createdAt: todayNoon,
+      items: {
+        create: [
+          {
+            productId: products[11].id, // Pringles
+            quantity: 2,
+            unitCostPrice: 2600,
+            unitSellingPrice: 3400,
+            totalCostPrice: 5200,
+            totalRevenue: 6800,
+            grossProfit: 1600,
+          },
+          {
+            productId: products[15].id, // Chicken Franks
+            quantity: 2,
+            unitCostPrice: 2200,
+            unitSellingPrice: 2850,
+            totalCostPrice: 4400,
+            totalRevenue: 5700,
+            grossProfit: 1300,
+          },
+          {
+            productId: products[6].id, // Devon King's Oil
+            quantity: 2,
+            unitCostPrice: 2900,
+            unitSellingPrice: 3500,
+            totalCostPrice: 5800,
+            totalRevenue: 7000,
+            grossProfit: 1200,
           },
           {
             productId: products[14].id, // Oral-B
@@ -562,262 +590,154 @@ async function main() {
             productId: products[2].id, // Coke
             quantity: 2,
             unitCostPrice: 280,
-            unitSellingPrice: 400,
+            unitSellingPrice: 350,
             totalCostPrice: 560,
-            totalRevenue: 800,
-            grossProfit: 240,
+            totalRevenue: 700,
+            grossProfit: 140,
           },
         ],
       },
     },
   });
 
-  // Sale 5: Wholesale Carton Order (Mama Funke Canteen - Credit)
-  await prisma.sale.create({
-    data: {
-      businessId: business.id,
-      customerId: cust4.id,
-      receiptNumber: "REC-20260914-0830",
-      subtotal: 55000,
-      discount: 0,
-      totalAmount: 55000,
-      amountPaid: 10000,
-      balanceDue: 45000,
-      paymentMethod: PaymentMethod.CASH,
-      paymentStatus: PaymentStatus.PARTIAL,
-      notes: "Commercial bulk provision supply for catering",
-      createdAt: new Date("2026-09-14T08:30:00Z"),
-      items: {
-        create: [
-          {
-            productId: products[8].id, // Indomie pack
-            quantity: 100,
-            unitCostPrice: 310,
-            unitSellingPrice: 380,
-            totalCostPrice: 31000,
-            totalRevenue: 38000,
-            grossProfit: 7000,
-          },
-          {
-            productId: products[5].id, // Semovita
-            quantity: 5,
-            unitCostPrice: 2800,
-            unitSellingPrice: 3400,
-            totalCostPrice: 14000,
-            totalRevenue: 17000,
-            grossProfit: 3000,
-          },
-        ],
-      },
-    },
-  });
-
-  // Sale 6: Credit Sale (Chioma Okonjo)
-  await prisma.sale.create({
+  // Today Sale C: Afternoon Bank Transfer with Partial Credit (Chioma Okonjo)
+  const todayCreditSale = await prisma.sale.create({
     data: {
       businessId: business.id,
       customerId: cust2.id,
-      receiptNumber: "REC-20260915-1810",
-      subtotal: 14200,
+      receiptNumber: `REC-${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, "0")}${now.getDate().toString().padStart(2, "0")}-0303`,
+      subtotal: 24200,
       discount: 0,
-      totalAmount: 14200,
-      amountPaid: 0,
-      balanceDue: 14200,
-      paymentMethod: PaymentMethod.CREDIT,
-      paymentStatus: PaymentStatus.UNPAID,
-      notes: "Household monthly ledger purchase",
-      createdAt: new Date("2026-09-15T18:10:00Z"),
+      totalAmount: 24200,
+      amountPaid: 15000, // +₦15,000 Direct Bank Transfer Verified
+      balanceDue: 9200, // +₦9,200 New Debt Given Today
+      paymentMethod: PaymentMethod.TRANSFER,
+      paymentStatus: PaymentStatus.PARTIAL,
+      notes: "GTBank Transfer Ref #992011; balance booked to family ledger",
+      createdAt: todayAfternoon,
       items: {
         create: [
           {
-            productId: products[3].id, // Hollandia 1L
-            quantity: 2,
-            unitCostPrice: 1750,
-            unitSellingPrice: 2200,
-            totalCostPrice: 3500,
-            totalRevenue: 4400,
-            grossProfit: 900,
-          },
-          {
-            productId: products[15].id, // Chicken Franks
-            quantity: 2,
-            unitCostPrice: 2200,
-            unitSellingPrice: 2850,
-            totalCostPrice: 4400,
-            totalRevenue: 5700,
-            grossProfit: 1300,
-          },
-          {
-            productId: products[4].id, // Cornflakes
-            quantity: 1,
-            unitCostPrice: 2500,
-            unitSellingPrice: 3100,
-            totalCostPrice: 2500,
-            totalRevenue: 3100,
-            grossProfit: 600,
-          },
-          {
-            productId: products[9].id, // Digestives
-            quantity: 1,
-            unitCostPrice: 780,
-            unitSellingPrice: 1000,
-            totalCostPrice: 780,
-            totalRevenue: 1000,
-            grossProfit: 220,
-          },
-        ],
-      },
-    },
-  });
-
-  // Sale 7: Full Settlement (Dr. Babatunde Adeleke)
-  await prisma.sale.create({
-    data: {
-      businessId: business.id,
-      customerId: cust3.id,
-      receiptNumber: "REC-20260916-0915",
-      subtotal: 12050,
-      discount: 0,
-      totalAmount: 12050,
-      amountPaid: 12050,
-      balanceDue: 0,
-      paymentMethod: PaymentMethod.POS,
-      paymentStatus: PaymentStatus.PAID,
-      createdAt: new Date("2026-09-16T09:15:00Z"),
-      items: {
-        create: [
-          {
-            productId: products[11].id, // Pringles
-            quantity: 2,
-            unitCostPrice: 2600,
+            productId: products[5].id, // Semovita
+            quantity: 4,
+            unitCostPrice: 2800,
             unitSellingPrice: 3400,
-            totalCostPrice: 5200,
-            totalRevenue: 6800,
-            grossProfit: 1600,
-          },
-          {
-            productId: products[15].id, // Chicken Franks
-            quantity: 1,
-            unitCostPrice: 2200,
-            unitSellingPrice: 2850,
-            totalCostPrice: 2200,
-            totalRevenue: 2850,
-            grossProfit: 650,
+            totalCostPrice: 11200,
+            totalRevenue: 13600,
+            grossProfit: 2400,
           },
           {
             productId: products[13].id, // Sunlight
-            quantity: 1,
+            quantity: 2,
             unitCostPrice: 1550,
             unitSellingPrice: 2000,
-            totalCostPrice: 1550,
-            totalRevenue: 2000,
-            grossProfit: 450,
-          },
-          {
-            productId: products[10].id, // Chinchin
-            quantity: 2,
-            unitCostPrice: 160,
-            unitSellingPrice: 200,
-            totalCostPrice: 320,
-            totalRevenue: 400,
-            grossProfit: 80,
-          },
-        ],
-      },
-    },
-  });
-
-  // Sale 8: Partial Cash Sale (Emeka Okafor)
-  await prisma.sale.create({
-    data: {
-      businessId: business.id,
-      customerId: cust5.id,
-      receiptNumber: "REC-20260916-1520",
-      subtotal: 8400,
-      discount: 0,
-      totalAmount: 8400,
-      amountPaid: 3000,
-      balanceDue: 5400,
-      paymentMethod: PaymentMethod.CASH,
-      paymentStatus: PaymentStatus.PARTIAL,
-      notes: "Deposited ₦3,000 cash at register",
-      createdAt: new Date("2026-09-16T15:20:00Z"),
-      items: {
-        create: [
-          {
-            productId: products[1].id, // Milo
-            quantity: 1,
-            unitCostPrice: 2150,
-            unitSellingPrice: 2700,
-            totalCostPrice: 2150,
-            totalRevenue: 2700,
-            grossProfit: 550,
-          },
-          {
-            productId: products[6].id, // Oil
-            quantity: 1,
-            unitCostPrice: 2900,
-            unitSellingPrice: 3500,
-            totalCostPrice: 2900,
-            totalRevenue: 3500,
-            grossProfit: 600,
+            totalCostPrice: 3100,
+            totalRevenue: 4000,
+            grossProfit: 900,
           },
           {
             productId: products[3].id, // Hollandia
-            quantity: 1,
+            quantity: 3,
             unitCostPrice: 1750,
             unitSellingPrice: 2200,
-            totalCostPrice: 1750,
-            totalRevenue: 2200,
-            grossProfit: 450,
+            totalCostPrice: 5250,
+            totalRevenue: 6600,
+            grossProfit: 1350,
           },
         ],
       },
     },
   });
 
-  console.log("💡 Logging operating expenses...");
+  // Today Debt Repayment at Till: Customer brings physical cash to clear past balance
+  await prisma.debtPayment.create({
+    data: {
+      saleId: todayCreditSale.id,
+      customerId: cust5.id, // Emeka Okafor brings cash
+      amount: 5000, // +₦5,000 Additional Cash in Drawer
+      paymentMethod: PaymentMethod.CASH,
+      note: "Cash payment at register toward outstanding ledger",
+      paidAt: todayAfternoon,
+    },
+  });
+
+  // ----------------------------------------------------------------
+  // POPULATING STORE OPERATIONAL EXPENSES (All Enum Categories)
+  // ----------------------------------------------------------------
+  console.log("💡 Logging comprehensive store expenses...");
   await prisma.expense.createMany({
     data: [
       {
         businessId: business.id,
+        category: ExpenseCategory.RENT,
+        title: "Monthly Store Front & Warehouse Lease Allocation",
+        amount: 85000,
+        note: "Prorated monthly commercial property rental fee",
+        date: new Date(now.getFullYear(), now.getMonth(), 2, 10, 0, 0),
+      },
+      {
+        businessId: business.id,
         category: ExpenseCategory.UTILITIES,
-        title: "Diesel Fuel for Generator (45 Litres)",
-        amount: 54000,
-        note: "Emergency power during grid outage",
-        date: new Date("2026-09-08T11:00:00Z"),
+        title: "Diesel Fuel Supply for Generator (50 Litres)",
+        amount: 55000,
+        note: "Morning peak power backup during local feeder trip",
+        date: new Date(now.getFullYear(), now.getMonth(), 5, 11, 30, 0),
+      },
+      {
+        businessId: business.id,
+        category: ExpenseCategory.UTILITIES,
+        title: "EKEDC Prepaid Commercial Electricity Token",
+        amount: 25000,
+        note: "3-phase power meter top-up",
+        date: new Date(now.getFullYear(), now.getMonth(), 8, 9, 0, 0),
       },
       {
         businessId: business.id,
         category: ExpenseCategory.PACKAGING,
-        title: "Biodegradable Shopping Bags & POS Rolls",
-        amount: 8500,
-        note: "3 bundles of 500-count bags + 10 rolls thermal 58mm",
-        date: new Date("2026-09-10T14:30:00Z"),
+        title: "Biodegradable Branded Carrier Bags (3 Bundles)",
+        amount: 10500,
+        note: "Medium and Jumbo retail checkout bags",
+        date: new Date(now.getFullYear(), now.getMonth(), 10, 14, 0, 0),
+      },
+      {
+        businessId: business.id,
+        category: ExpenseCategory.PACKAGING,
+        title: "POS 58mm Thermal Printer Paper Rolls (Box of 20)",
+        amount: 6000,
+        note: "Receipt paper rolls for till terminal",
+        date: new Date(now.getFullYear(), now.getMonth(), 12, 16, 20, 0),
       },
       {
         businessId: business.id,
         category: ExpenseCategory.LOGISTICS,
-        title: "Wholesale Market Haulage Delivery",
-        amount: 14000,
-        note: "Transport fee for Indomie and flour pallets from distributor",
-        date: new Date("2026-09-12T09:15:00Z"),
+        title: "Haulage Truck Delivery Fee (Market Consignment)",
+        amount: 18000,
+        note: "Offloading of flour, semo, and noodle pallets from central warehouse",
+        date: new Date(now.getFullYear(), now.getMonth(), 13, 8, 45, 0),
       },
       {
         businessId: business.id,
         category: ExpenseCategory.SALARIES,
-        title: "Mid-Month Cashier & Shelf-Attendant Stipend",
-        amount: 45000,
-        note: "Weekly wages for 2 floor staff",
-        date: new Date("2026-09-15T17:00:00Z"),
+        title: "Store Attendant & Cashier Bi-Weekly Wages",
+        amount: 60000,
+        note: "Shift compensation for 2 sales attendants",
+        date: new Date(now.getFullYear(), now.getMonth(), 15, 17, 0, 0),
       },
       {
         businessId: business.id,
         category: ExpenseCategory.MISCELLANEOUS,
-        title: "Store Cleaning Reagents & Mop Head Replacements",
-        amount: 3200,
-        note: "Sanitary upkeep",
-        date: new Date("2026-09-16T08:00:00Z"),
+        title: "Store Facility Sanitary Supplies & Industrial Mops",
+        amount: 4500,
+        note: "Floor disinfectant, hand sanitizers, and detergents",
+        date: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 15, 0), // Logged today
+      },
+      {
+        businessId: business.id,
+        category: ExpenseCategory.MISCELLANEOUS,
+        title: "Emergency POS Card Reader Charging Dock Replacement",
+        amount: 3800,
+        note: "Replacement USB-C dock for counter terminal",
+        date: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0), // Logged today
       },
     ],
   });
