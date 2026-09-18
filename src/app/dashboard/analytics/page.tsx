@@ -3,26 +3,60 @@ import { db } from "@/lib/db";
 import { formatCurrency } from "@/lib/utils";
 import {
   TrendingUp,
-  DollarSign,
-  PieChart,
-  BarChart3,
-  Receipt,
-  Wallet,
-  ArrowUpRight,
-  Package,
+  TrendingDown,
+  Award,
+  AlertTriangle,
+  CreditCard,
+  Banknote,
+  Smartphone,
+  BadgePercent,
   Layers,
-  Percent,
+  ArrowUpRight,
+  ArrowDownRight,
+  Receipt,
+  Calendar,
+  Wallet,
 } from "lucide-react";
 
-export const revalidate = 0; // Fresh financial numbers on load
+export const revalidate = 0;
 
-export default async function AnalyticsPage() {
+interface ProductStat {
+  id: string;
+  name: string;
+  sku: string | null;
+  unitsSold: number;
+  totalRevenue: number;
+  totalCost: number;
+  grossProfit: number;
+  marginPercent: number;
+}
+
+export default async function AnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string; year?: string }>;
+}) {
+  const params = await searchParams;
+  const now = new Date();
+  const selectedYear = parseInt(params.year || now.getFullYear().toString(), 10);
+  const selectedMonth = parseInt(params.month || (now.getMonth() + 1).toString(), 10);
+
+  // Month date boundary
+  const startDate = new Date(selectedYear, selectedMonth - 1, 1);
+  const endDate = new Date(selectedYear, selectedMonth, 0, 23, 59, 59, 999);
+
   const business = await db.business.findFirst();
 
-  // Fetch all historical financial objects
-  const [sales, expenses, products, categories] = await Promise.all([
+  // Query Sales & Expenses strictly within the active month window
+  const [monthSales, monthExpenses, allProducts] = await Promise.all([
     db.sale.findMany({
-      where: { businessId: business?.id },
+      where: {
+        businessId: business?.id,
+        createdAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
       include: {
         items: {
           include: {
@@ -31,458 +65,447 @@ export default async function AnalyticsPage() {
         },
         customer: true,
       },
-      orderBy: { createdAt: "asc" },
     }),
     db.expense.findMany({
-      where: { businessId: business?.id },
-      orderBy: { date: "desc" },
+      where: {
+        businessId: business?.id,
+        date: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
     }),
     db.product.findMany({
       where: { businessId: business?.id },
     }),
-    db.category.findMany({
-      where: { businessId: business?.id },
-    }),
   ]);
 
-  // 1. High-level aggregates
-  const totalGrossRevenue = sales.reduce((acc, s) => acc + s.totalAmount, 0);
-  const totalActualCashCollected = sales.reduce((acc, s) => acc + s.amountPaid, 0);
-  const totalDebtorReceivables = sales.reduce((acc, s) => acc + s.balanceDue, 0);
-  const totalOperatingExpenses = expenses.reduce((acc, e) => acc + e.amount, 0);
+  // ----------------------------------------------------------------
+  // 1. High-Level Aggregates
+  // ----------------------------------------------------------------
+  const grossTurnover = monthSales.reduce((acc, s) => acc + s.totalAmount, 0);
+  const cashCollected = monthSales.reduce((acc, s) => acc + s.amountPaid, 0);
+  const uncollectedCredit = monthSales.reduce((acc, s) => acc + s.balanceDue, 0);
+  const totalOperatingCosts = monthExpenses.reduce((acc, e) => acc + e.amount, 0);
 
-  // Snapshot COGS and Gross Margins from line items
   let totalCOGS = 0;
   let totalGrossProfit = 0;
 
-  sales.forEach((sale) => {
+  // ----------------------------------------------------------------
+  // 2. Product-Level Profitability & Revenue Aggregation
+  // ----------------------------------------------------------------
+  const productPerformanceMap: Record<string, ProductStat> = {};
+
+  // Initialize with zero stats for catalog coverage
+  allProducts.forEach((p) => {
+    productPerformanceMap[p.id] = {
+      id: p.id,
+      name: p.name,
+      sku: p.sku,
+      unitsSold: 0,
+      totalRevenue: 0,
+      totalCost: 0,
+      grossProfit: 0,
+      marginPercent: 0,
+    };
+  });
+
+  monthSales.forEach((sale) => {
     sale.items.forEach((item) => {
       totalCOGS += item.totalCostPrice;
       totalGrossProfit += item.grossProfit;
+
+      const current = productPerformanceMap[item.productId];
+      if (current) {
+        current.unitsSold += item.quantity;
+        current.totalRevenue += item.totalRevenue;
+        current.totalCost += item.totalCostPrice;
+        current.grossProfit += item.grossProfit;
+      }
     });
   });
 
-  const netOperatingProfit = totalGrossProfit - totalOperatingExpenses;
-  const netMarginPercent =
-    totalGrossRevenue > 0
-      ? ((netOperatingProfit / totalGrossRevenue) * 100).toFixed(1)
-      : "0.0";
-  const grossMarginPercent =
-    totalGrossRevenue > 0
-      ? ((totalGrossProfit / totalGrossRevenue) * 100).toFixed(1)
-      : "0.0";
+  // Calculate gross margin % per item
+  const productStatsList = Object.values(productPerformanceMap).map((p) => ({
+    ...p,
+    marginPercent: p.totalRevenue > 0 ? (p.grossProfit / p.totalRevenue) * 100 : 0,
+  }));
 
-  // 2. Channel Distribution (Cash vs Transfer vs POS vs Unpaid Debt)
-  const channelTotals = {
-    CASH: 0,
-    TRANSFER: 0,
-    POS: 0,
-    UNPAID_DEBT: totalDebtorReceivables,
+  // Filter items that had activity this month
+  const activeProducts = productStatsList.filter((p) => p.unitsSold > 0);
+
+  // Extremes: Profit
+  const sortedByProfit = [...activeProducts].sort((a, b) => b.grossProfit - a.grossProfit);
+  const topProfitProduct = sortedByProfit[0] || null;
+  const lowestProfitProduct = sortedByProfit[sortedByProfit.length - 1] || null;
+
+  // Extremes: Revenue
+  const sortedByRevenue = [...activeProducts].sort((a, b) => b.totalRevenue - a.totalRevenue);
+  const topRevenueProduct = sortedByRevenue[0] || null;
+  const lowestRevenueProduct = sortedByRevenue[sortedByRevenue.length - 1] || null;
+
+  // True Net Profit
+  const netCleanProfit = totalGrossProfit - totalOperatingCosts;
+  const netMarginPct = grossTurnover > 0 ? ((netCleanProfit / grossTurnover) * 100).toFixed(1) : "0.0";
+
+  // ----------------------------------------------------------------
+  // 3. Payment Method Dominance Breakdown
+  // ----------------------------------------------------------------
+  const methodMap = {
+    CASH: { count: 0, total: 0, label: "Cash Tender", icon: Banknote },
+    TRANSFER: { count: 0, total: 0, label: "Bank Transfer", icon: Smartphone },
+    POS: { count: 0, total: 0, label: "POS Terminal", icon: CreditCard },
+    CREDIT: { count: 0, total: 0, label: "Debt / Credit Note", icon: Wallet },
   };
 
-  sales.forEach((s) => {
-    if (s.paymentMethod === "CASH") channelTotals.CASH += s.amountPaid;
-    if (s.paymentMethod === "TRANSFER") channelTotals.TRANSFER += s.amountPaid;
-    if (s.paymentMethod === "POS") channelTotals.POS += s.amountPaid;
+  monthSales.forEach((sale) => {
+    if (sale.paymentMethod in methodMap) {
+      methodMap[sale.paymentMethod].count += 1;
+      methodMap[sale.paymentMethod].total += sale.amountPaid;
+    }
+    // If sale had remaining credit balance
+    if (sale.balanceDue > 0) {
+      methodMap.CREDIT.total += sale.balanceDue;
+    }
   });
 
-  // 3. Top Performing SKUs by Gross Profit Generation
-  const skuMap: Record<
-    string,
-    { name: string; sku: string | null; unitsSold: number; revenue: number; profit: number }
-  > = {};
+  const paymentBreakdown = Object.entries(methodMap)
+    .map(([key, data]) => ({
+      key,
+      ...data,
+      share: grossTurnover > 0 ? (data.total / grossTurnover) * 100 : 0,
+    }))
+    .sort((a, b) => b.total - a.total);
 
-  sales.forEach((s) => {
-    s.items.forEach((item) => {
-      if (!skuMap[item.productId]) {
-        skuMap[item.productId] = {
-          name: item.product.name,
-          sku: item.product.sku,
-          unitsSold: 0,
-          revenue: 0,
-          profit: 0,
-        };
-      }
-      skuMap[item.productId].unitsSold += item.quantity;
-      skuMap[item.productId].revenue += item.totalRevenue;
-      skuMap[item.productId].profit += item.grossProfit;
-    });
-  });
+  const dominantMethod = paymentBreakdown[0];
 
-  const topProducts = Object.values(skuMap)
-    .sort((a, b) => b.profit - a.profit)
-    .slice(0, 6);
-
-  // 4. Expenses Breakdown by Category
-  const expenseByCategory: Record<string, number> = {};
-  expenses.forEach((e) => {
-    expenseByCategory[e.category] = (expenseByCategory[e.category] || 0) + e.amount;
-  });
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-brand-border/80 pb-4">
+      {/* ----------------- Header & Month Filter ----------------- */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-brand-border/80 pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted bg-brand-surface px-2 py-0.5 rounded-md border border-brand-border">
-              Financial Intelligence
+            <span className="w-2 h-2 rounded-full bg-fintech-mint" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-muted">
+              Monthly Audit &amp; Leadership
             </span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-brand-ink mt-1">
-            Executive Performance &amp; Margins
+          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-brand-ink mt-0.5">
+            {monthNames[selectedMonth - 1]} {selectedYear} Insights
           </h1>
         </div>
-        <p className="text-xs text-brand-muted font-mono">
-          Currency: <span className="font-bold text-brand-ink">{business?.currency || "NGN"}</span> • Snapshot FIFO
-        </p>
-      </div>
 
-      {/* 4 Core KPI Summary Banners */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="bg-brand-card border border-brand-border p-4 rounded-2xl shadow-2xs">
-          <div className="flex items-center justify-between text-brand-muted">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Gross Turnover</span>
-            <div className="w-7 h-7 rounded-lg bg-brand-surface border border-brand-border flex items-center justify-center text-brand-ink">
-              <DollarSign className="w-3.5 h-3.5" />
+        {/* Date Selector */}
+        <div className="flex items-center gap-2">
+          <form className="flex items-center gap-2">
+            <div className="relative">
+              <Calendar className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-brand-muted" />
+              <select
+                name="month"
+                defaultValue={selectedMonth}
+                className="pl-8 pr-3 py-1.5 text-xs font-bold bg-white border border-brand-border rounded-xl text-brand-ink focus:outline-none"
+              >
+                {monthNames.map((m, idx) => (
+                  <option key={idx} value={idx + 1}>
+                    {m}
+                  </option>
+                ))}
+              </select>
             </div>
-          </div>
-          <div className="mt-2 text-xl sm:text-2xl font-black font-mono text-brand-ink">
-            {formatCurrency(totalGrossRevenue)}
-          </div>
-          <div className="mt-1 flex items-center gap-1.5 text-[11px] text-brand-muted">
-            <span className="font-mono font-bold text-brand-ink">{sales.length}</span> total orders settled
-          </div>
-        </div>
-
-        <div className="bg-brand-card border border-brand-border p-4 rounded-2xl shadow-2xs">
-          <div className="flex items-center justify-between text-brand-muted">
-            <span className="text-[11px] font-bold uppercase tracking-wider">COGS Burn</span>
-            <div className="w-7 h-7 rounded-lg bg-brand-surface border border-brand-border flex items-center justify-center text-brand-ink">
-              <Package className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="mt-2 text-xl sm:text-2xl font-black font-mono text-brand-ink">
-            {formatCurrency(totalCOGS)}
-          </div>
-          <div className="mt-1 flex items-center gap-1.5 text-[11px] text-brand-muted">
-            <span>Supplier direct buying cost</span>
-          </div>
-        </div>
-
-        <div className="bg-brand-card border border-brand-border p-4 rounded-2xl shadow-2xs">
-          <div className="flex items-center justify-between text-brand-muted">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Operating Expenses</span>
-            <div className="w-7 h-7 rounded-lg bg-fintech-rose-light border border-fintech-rose-border flex items-center justify-center text-fintech-rose">
-              <Receipt className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="mt-2 text-xl sm:text-2xl font-black font-mono text-fintech-rose">
-            {formatCurrency(totalOperatingExpenses)}
-          </div>
-          <div className="mt-1 flex items-center gap-1 text-[11px] text-brand-muted">
-            <span>Overheads (Utilities, packaging)</span>
-          </div>
-        </div>
-
-        <div className="bg-brand-card border border-brand-border p-4 rounded-2xl shadow-2xs">
-          <div className="flex items-center justify-between text-brand-muted">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Net Clean Profit</span>
-            <div className="w-7 h-7 rounded-lg bg-fintech-mint-light border border-fintech-mint-border flex items-center justify-center text-emerald-700">
-              <TrendingUp className="w-3.5 h-3.5" />
-            </div>
-          </div>
-          <div className="mt-2 text-xl sm:text-2xl font-black font-mono text-emerald-600">
-            {formatCurrency(netOperatingProfit)}
-          </div>
-          <div className="mt-1 flex items-center gap-1.5 text-[11px] text-emerald-700 font-bold">
-            <span>{netMarginPercent}% Net Margin</span>
-            <span className="text-brand-muted font-normal">({grossMarginPercent}% Gross)</span>
-          </div>
+            <select
+              name="year"
+              defaultValue={selectedYear}
+              className="px-3 py-1.5 text-xs font-bold bg-white border border-brand-border rounded-xl text-brand-ink focus:outline-none"
+            >
+              {[2025, 2026, 2027].map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+            <button
+              type="submit"
+              className="px-3 py-1.5 bg-brand-ink text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition"
+            >
+              Filter
+            </button>
+          </form>
         </div>
       </div>
 
-      {/* GRAPH ROW 1: Waterfall Cost Breakdown & Channel Inflow */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Left 7 cols: Margin Waterfall Progression */}
-        <div className="lg:col-span-7 bg-brand-card border border-brand-border rounded-2xl p-5 shadow-2xs space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-bold text-brand-ink">Profit Margin Waterfall</h2>
-              <p className="text-[11px] text-brand-muted">
-                From top-line gross receipt to net operational cash retained.
-              </p>
-            </div>
-            <Percent className="w-4 h-4 text-brand-muted" />
-          </div>
-
-          {/* Graphical Horizontal Stack Bar */}
-          <div className="space-y-2 pt-2">
-            <div className="h-6 w-full rounded-xl overflow-hidden flex bg-brand-surface border border-brand-border/80">
-              <div
-                style={{ width: `${totalGrossRevenue > 0 ? (totalCOGS / totalGrossRevenue) * 100 : 0}%` }}
-                className="bg-slate-400 transition-all"
-                title={`COGS: ${formatCurrency(totalCOGS)}`}
-              />
-              <div
-                style={{
-                  width: `${
-                    totalGrossRevenue > 0
-                      ? (totalOperatingExpenses / totalGrossRevenue) * 100
-                      : 0
-                  }%`,
-                }}
-                className="bg-fintech-rose transition-all"
-                title={`Expenses: ${formatCurrency(totalOperatingExpenses)}`}
-              />
-              <div
-                style={{
-                  width: `${
-                    totalGrossRevenue > 0
-                      ? Math.max(0, (netOperatingProfit / totalGrossRevenue) * 100)
-                      : 0
-                  }%`,
-                }}
-                className="bg-emerald-500 transition-all"
-                title={`Net Profit: ${formatCurrency(netOperatingProfit)}`}
-              />
-            </div>
-
-            <div className="flex items-center justify-between text-[11px] pt-1 border-t border-brand-border/60">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-sm bg-slate-400" />
-                <span className="text-brand-muted font-medium">COGS ({formatCurrency(totalCOGS)})</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-sm bg-fintech-rose" />
-                <span className="text-brand-muted font-medium">Expenses ({formatCurrency(totalOperatingExpenses)})</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" />
-                <span className="font-bold text-emerald-700">Net Retained ({formatCurrency(netOperatingProfit)})</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Metric Comparison Table */}
-          <div className="pt-2 divide-y divide-brand-border/60 text-xs">
-            <div className="py-2 flex justify-between">
-              <span className="text-brand-muted">Total Gross Invoiced</span>
-              <span className="font-mono font-bold text-brand-ink">{formatCurrency(totalGrossRevenue)}</span>
-            </div>
-            <div className="py-2 flex justify-between text-slate-500">
-              <span>Less: Product Buying Cost (COGS)</span>
-              <span className="font-mono text-slate-700">- {formatCurrency(totalCOGS)}</span>
-            </div>
-            <div className="py-2 flex justify-between font-semibold text-brand-ink">
-              <span>Gross Product Margin</span>
-              <span className="font-mono">{formatCurrency(totalGrossProfit)}</span>
-            </div>
-            <div className="py-2 flex justify-between text-fintech-rose">
-              <span>Less: Store Operating Overheads</span>
-              <span className="font-mono">- {formatCurrency(totalOperatingExpenses)}</span>
-            </div>
-            <div className="py-2 flex justify-between font-black text-emerald-700 pt-3">
-              <span>True Net Bottom-Line Profit</span>
-              <span className="font-mono text-sm">{formatCurrency(netOperatingProfit)}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Right 5 cols: Settlement Distribution (Cash vs Transfer vs POS vs Debt) */}
-        <div className="lg:col-span-5 bg-brand-card border border-brand-border rounded-2xl p-5 shadow-2xs space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-bold text-brand-ink">Settlement Channels</h2>
-              <p className="text-[11px] text-brand-muted">Distribution of collected cash vs. credit.</p>
-            </div>
-            <Wallet className="w-4 h-4 text-brand-muted" />
-          </div>
-
-          <div className="space-y-3 pt-2">
-            {/* Cash */}
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="font-semibold text-brand-ink">Physical Cash</span>
-                <span className="font-mono font-bold text-brand-ink">{formatCurrency(channelTotals.CASH)}</span>
-              </div>
-              <div className="h-2 w-full bg-brand-surface rounded-full overflow-hidden border border-brand-border/60">
-                <div
-                  className="h-full bg-emerald-500 rounded-full"
-                  style={{
-                    width: `${totalGrossRevenue > 0 ? (channelTotals.CASH / totalGrossRevenue) * 100 : 0}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Transfer */}
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="font-semibold text-brand-ink">Bank Transfer</span>
-                <span className="font-mono font-bold text-brand-ink">{formatCurrency(channelTotals.TRANSFER)}</span>
-              </div>
-              <div className="h-2 w-full bg-brand-surface rounded-full overflow-hidden border border-brand-border/60">
-                <div
-                  className="h-full bg-sky-500 rounded-full"
-                  style={{
-                    width: `${totalGrossRevenue > 0 ? (channelTotals.TRANSFER / totalGrossRevenue) * 100 : 0}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* POS Card */}
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="font-semibold text-brand-ink">POS Terminal Card</span>
-                <span className="font-mono font-bold text-brand-ink">{formatCurrency(channelTotals.POS)}</span>
-              </div>
-              <div className="h-2 w-full bg-brand-surface rounded-full overflow-hidden border border-brand-border/60">
-                <div
-                  className="h-full bg-indigo-500 rounded-full"
-                  style={{
-                    width: `${totalGrossRevenue > 0 ? (channelTotals.POS / totalGrossRevenue) * 100 : 0}%`,
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Unpaid Debt / Credit */}
-            <div>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="font-bold text-fintech-rose">Open Customer Debt</span>
-                <span className="font-mono font-bold text-fintech-rose">
-                  {formatCurrency(channelTotals.UNPAID_DEBT)}
-                </span>
-              </div>
-              <div className="h-2 w-full bg-fintech-rose-light rounded-full overflow-hidden border border-fintech-rose-border">
-                <div
-                  className="h-full bg-fintech-rose rounded-full"
-                  style={{
-                    width: `${
-                      totalGrossRevenue > 0
-                        ? (channelTotals.UNPAID_DEBT / totalGrossRevenue) * 100
-                        : 0
-                    }%`,
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="p-3 bg-brand-surface rounded-xl border border-brand-border text-xs flex justify-between items-center">
-            <span className="text-brand-muted">Real Cash at Hand:</span>
-            <span className="font-mono font-black text-brand-ink">
-              {formatCurrency(totalActualCashCollected)}
+      {/* ----------------- Top 4 Extremes Cards ----------------- */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Highest Profit */}
+        <div className="bg-brand-card border border-brand-border rounded-2xl p-4 shadow-2xs relative overflow-hidden">
+          <div className="flex items-center justify-between text-brand-muted">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-fintech-mint-light border border-fintech-mint-border px-2 py-0.5 rounded-md">
+              Top Profit Contributor
             </span>
+            <Award className="w-4 h-4 text-fintech-mint" />
           </div>
+          {topProfitProduct ? (
+            <div className="mt-3 space-y-1">
+              <div className="text-sm font-bold text-brand-ink truncate" title={topProfitProduct.name}>
+                {topProfitProduct.name}
+              </div>
+              <div className="text-xl font-black font-mono text-emerald-700">
+                +{formatCurrency(topProfitProduct.grossProfit)}
+              </div>
+              <div className="text-[11px] text-brand-muted flex items-center gap-1">
+                <span>{topProfitProduct.unitsSold} units sold</span> •{" "}
+                <span className="font-bold text-brand-ink">{topProfitProduct.marginPercent.toFixed(0)}% margin</span>
+              </div>
+            </div>
+          ) : (
+            <div className="py-6 text-xs text-brand-muted">No sales logged for this month</div>
+          )}
+        </div>
+
+        {/* Lowest / Least Profit */}
+        <div className="bg-brand-card border border-brand-border rounded-2xl p-4 shadow-2xs">
+          <div className="flex items-center justify-between text-brand-muted">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-fintech-amber-light border border-fintech-amber-border px-2 py-0.5 rounded-md">
+              Lowest Profit Margin
+            </span>
+            <TrendingDown className="w-4 h-4 text-amber-600" />
+          </div>
+          {lowestProfitProduct ? (
+            <div className="mt-3 space-y-1">
+              <div className="text-sm font-bold text-brand-ink truncate" title={lowestProfitProduct.name}>
+                {lowestProfitProduct.name}
+              </div>
+              <div className="text-xl font-black font-mono text-slate-800">
+                +{formatCurrency(lowestProfitProduct.grossProfit)}
+              </div>
+              <div className="text-[11px] text-brand-muted flex items-center gap-1">
+                <span>{lowestProfitProduct.unitsSold} units sold</span> •{" "}
+                <span className="font-bold text-amber-700">{lowestProfitProduct.marginPercent.toFixed(0)}% margin</span>
+              </div>
+            </div>
+          ) : (
+            <div className="py-6 text-xs text-brand-muted">No sales logged for this month</div>
+          )}
+        </div>
+
+        {/* Highest Revenue */}
+        <div className="bg-brand-card border border-brand-border rounded-2xl p-4 shadow-2xs">
+          <div className="flex items-center justify-between text-brand-muted">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-sky-800 bg-sky-50 border border-sky-200 px-2 py-0.5 rounded-md">
+              Top Turnover Driver
+            </span>
+            <ArrowUpRight className="w-4 h-4 text-sky-600" />
+          </div>
+          {topRevenueProduct ? (
+            <div className="mt-3 space-y-1">
+              <div className="text-sm font-bold text-brand-ink truncate" title={topRevenueProduct.name}>
+                {topRevenueProduct.name}
+              </div>
+              <div className="text-xl font-black font-mono text-brand-ink">
+                {formatCurrency(topRevenueProduct.totalRevenue)}
+              </div>
+              <div className="text-[11px] text-brand-muted">
+                Contributed <span className="font-bold text-brand-ink">{topRevenueProduct.unitsSold} volume units</span>
+              </div>
+            </div>
+          ) : (
+            <div className="py-6 text-xs text-brand-muted">No sales logged for this month</div>
+          )}
+        </div>
+
+        {/* Lowest Revenue */}
+        <div className="bg-brand-card border border-brand-border rounded-2xl p-4 shadow-2xs">
+          <div className="flex items-center justify-between text-brand-muted">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-rose-800 bg-fintech-rose-light border border-fintech-rose-border px-2 py-0.5 rounded-md">
+              Slowest Revenue SKU
+            </span>
+            <ArrowDownRight className="w-4 h-4 text-fintech-rose" />
+          </div>
+          {lowestRevenueProduct ? (
+            <div className="mt-3 space-y-1">
+              <div className="text-sm font-bold text-brand-ink truncate" title={lowestRevenueProduct.name}>
+                {lowestRevenueProduct.name}
+              </div>
+              <div className="text-xl font-black font-mono text-slate-700">
+                {formatCurrency(lowestRevenueProduct.totalRevenue)}
+              </div>
+              <div className="text-[11px] text-brand-muted">
+                Only {lowestRevenueProduct.unitsSold} units rung up
+              </div>
+            </div>
+          ) : (
+            <div className="py-6 text-xs text-brand-muted">No sales logged for this month</div>
+          )}
         </div>
       </div>
 
-      {/* GRAPH ROW 2: High-Margin SKUs vs Expense Categories */}
+      {/* ----------------- Payment Methods & Cash Dominance ----------------- */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Left 8 cols: Top Profit Generating Products */}
-        <div className="lg:col-span-8 bg-brand-card border border-brand-border rounded-2xl p-5 shadow-2xs space-y-4">
+        {/* Payment Channels Ranking */}
+        <div className="lg:col-span-6 bg-brand-card border border-brand-border rounded-2xl p-5 shadow-2xs space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-bold text-brand-ink">Profit Leadership by Product</h2>
-              <p className="text-[11px] text-brand-muted">
-                Items ranked by actual gross naira margin contributed.
-              </p>
+              <h2 className="text-sm font-bold text-brand-ink">Payment Channel Ranking</h2>
+              <p className="text-[11px] text-brand-muted">Which payment method customers use the most.</p>
             </div>
-            <BarChart3 className="w-4 h-4 text-brand-muted" />
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-brand-border text-[10px] font-bold uppercase tracking-wider text-brand-muted">
-                  <th className="pb-2.5">Product Title</th>
-                  <th className="pb-2.5 text-center">Units Sold</th>
-                  <th className="pb-2.5 text-right">Gross Sales</th>
-                  <th className="pb-2.5 text-right">Profit Contribution</th>
-                  <th className="pb-2.5 text-right">Markup</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-brand-border/60">
-                {topProducts.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-8 text-center text-brand-muted">
-                      No sales recorded yet.
-                    </td>
-                  </tr>
-                ) : (
-                  topProducts.map((p, idx) => {
-                    const markup = p.revenue > 0 ? ((p.profit / (p.revenue - p.profit)) * 100).toFixed(0) : "0";
-                    return (
-                      <tr key={idx} className="hover:bg-brand-surface/70 transition">
-                        <td className="py-2.5 font-bold text-brand-ink">
-                          <div className="truncate max-w-[200px]">{p.name}</div>
-                          {p.sku && <span className="font-mono text-[10px] text-brand-muted block">{p.sku}</span>}
-                        </td>
-                        <td className="py-2.5 text-center font-mono font-semibold text-brand-ink">
-                          {p.unitsSold}
-                        </td>
-                        <td className="py-2.5 text-right font-mono text-brand-muted">
-                          {formatCurrency(p.revenue)}
-                        </td>
-                        <td className="py-2.5 text-right font-mono font-bold text-emerald-700">
-                          {formatCurrency(p.profit)}
-                        </td>
-                        <td className="py-2.5 text-right font-mono text-[11px] font-semibold text-brand-ink">
-                          +{markup}%
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Right 4 cols: Operational Expense Drivers */}
-        <div className="lg:col-span-4 bg-brand-card border border-brand-border rounded-2xl p-5 shadow-2xs space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-bold text-brand-ink">Overhead Outflows</h2>
-              <p className="text-[11px] text-brand-muted">Where operational funds leak.</p>
-            </div>
-            <PieChart className="w-4 h-4 text-brand-muted" />
-          </div>
-
-          <div className="space-y-3 pt-2">
-            {Object.keys(expenseByCategory).length === 0 ? (
-              <div className="py-8 text-center text-xs text-brand-muted">
-                No expense entries logged.
-              </div>
-            ) : (
-              Object.entries(expenseByCategory).map(([cat, amount]) => {
-                const pct =
-                  totalOperatingExpenses > 0
-                    ? ((amount / totalOperatingExpenses) * 100).toFixed(0)
-                    : "0";
-                return (
-                  <div key={cat} className="space-y-1">
-                    <div className="flex justify-between text-xs">
-                      <span className="font-semibold text-brand-ink">{cat}</span>
-                      <span className="font-mono font-bold text-brand-ink">
-                        {formatCurrency(amount)}{" "}
-                        <span className="text-[10px] text-brand-muted font-normal">({pct}%)</span>
-                      </span>
-                    </div>
-                    <div className="h-1.5 w-full bg-brand-surface rounded-full overflow-hidden border border-brand-border/60">
-                      <div
-                        className="h-full bg-slate-800 rounded-full"
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })
+            {dominantMethod && (
+              <span className="text-[10px] font-bold text-emerald-800 bg-fintech-mint-light border border-fintech-mint-border px-2 py-0.5 rounded-md">
+                Top: {dominantMethod.label}
+              </span>
             )}
           </div>
+
+          <div className="space-y-3 pt-1">
+            {paymentBreakdown.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.key} className="space-y-1.5 p-3 rounded-xl bg-brand-surface border border-brand-border/60">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 rounded-lg bg-white border border-brand-border flex items-center justify-center text-brand-ink">
+                        <Icon className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="text-xs font-bold text-brand-ink">{item.label}</span>
+                      {item.count > 0 && (
+                        <span className="text-[10px] text-brand-muted font-mono">({item.count} orders)</span>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <span className="font-mono font-black text-xs text-brand-ink block">
+                        {formatCurrency(item.total)}
+                      </span>
+                      <span className="text-[10px] text-brand-muted font-mono">{item.share.toFixed(1)}% of sales</span>
+                    </div>
+                  </div>
+
+                  <div className="h-1.5 w-full bg-slate-200/80 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${
+                        item.key === "CASH"
+                          ? "bg-emerald-500"
+                          : item.key === "TRANSFER"
+                          ? "bg-sky-500"
+                          : item.key === "POS"
+                          ? "bg-indigo-500"
+                          : "bg-fintech-rose"
+                      }`}
+                      style={{ width: `${item.share}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Realized Cash vs. True Net Profit */}
+        <div className="lg:col-span-6 bg-brand-card border border-brand-border rounded-2xl p-5 shadow-2xs space-y-4 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-brand-ink">True Net Profitability</h2>
+                <p className="text-[11px] text-brand-muted">Gross Margin less Operating Overheads.</p>
+              </div>
+              <BadgePercent className="w-4 h-4 text-brand-muted" />
+            </div>
+
+            <div className="mt-4 p-4 rounded-2xl bg-brand-surface border border-brand-border space-y-3">
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-brand-muted">Total Gross Inflow:</span>
+                <span className="font-mono font-bold text-brand-ink">{formatCurrency(grossTurnover)}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs text-slate-500">
+                <span>Inventory Cost (COGS):</span>
+                <span className="font-mono text-slate-700">- {formatCurrency(totalCOGS)}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs font-semibold text-brand-ink pt-1 border-t border-brand-border/60">
+                <span>Realized Gross Profit:</span>
+                <span className="font-mono">{formatCurrency(totalGrossProfit)}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs text-fintech-rose">
+                <span>Operating Expenses (Overheads):</span>
+                <span className="font-mono">- {formatCurrency(totalOperatingCosts)}</span>
+              </div>
+
+              <div className="flex justify-between items-baseline pt-2 border-t border-brand-border">
+                <div>
+                  <span className="text-xs font-bold text-brand-ink block">Clean Net Profit</span>
+                  <span className="text-[10px] text-emerald-700 font-bold">{netMarginPct}% Net Margin</span>
+                </div>
+                <span className="text-xl font-black font-mono text-emerald-600">
+                  {formatCurrency(netCleanProfit)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-3 bg-fintech-amber-light border border-fintech-amber-border rounded-xl text-xs flex items-center justify-between">
+            <span className="text-amber-950">Outstanding Debts this month:</span>
+            <span className="font-mono font-black text-fintech-rose">{formatCurrency(uncollectedCredit)}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ----------------- Complete Product Profitability Table ----------------- */}
+      <div className="bg-brand-card border border-brand-border rounded-2xl p-5 shadow-2xs space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-bold text-brand-ink">Product Margin &amp; Turnover Audit</h2>
+            <p className="text-[11px] text-brand-muted">Complete breakdown of every item rung up in this period.</p>
+          </div>
+          <span className="text-xs font-mono font-bold text-brand-muted">{activeProducts.length} Active SKUs</span>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-brand-border text-[10px] font-bold uppercase tracking-wider text-brand-muted">
+                <th className="pb-2.5">Item Name</th>
+                <th className="pb-2.5 text-center">Volume</th>
+                <th className="pb-2.5 text-right">Revenue</th>
+                <th className="pb-2.5 text-right">COGS Burn</th>
+                <th className="pb-2.5 text-right">Gross Profit</th>
+                <th className="pb-2.5 text-right">Margin %</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-brand-border/60">
+              {activeProducts.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-brand-muted">
+                    No product activity found for the selected month.
+                  </td>
+                </tr>
+              ) : (
+                sortedByProfit.map((prod) => (
+                  <tr key={prod.id} className="hover:bg-brand-surface/70 transition">
+                    <td className="py-2.5 font-bold text-brand-ink">
+                      <div className="truncate max-w-[220px]">{prod.name}</div>
+                      {prod.sku && <span className="font-mono text-[10px] text-brand-muted block">{prod.sku}</span>}
+                    </td>
+                    <td className="py-2.5 text-center font-mono font-semibold text-brand-ink">
+                      {prod.unitsSold}
+                    </td>
+                    <td className="py-2.5 text-right font-mono text-brand-muted">
+                      {formatCurrency(prod.totalRevenue)}
+                    </td>
+                    <td className="py-2.5 text-right font-mono text-slate-500">
+                      {formatCurrency(prod.totalCost)}
+                    </td>
+                    <td className="py-2.5 text-right font-mono font-bold text-emerald-700">
+                      {formatCurrency(prod.grossProfit)}
+                    </td>
+                    <td className="py-2.5 text-right font-mono font-bold text-brand-ink">
+                      {prod.marginPercent.toFixed(1)}%
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
