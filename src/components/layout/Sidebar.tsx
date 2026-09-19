@@ -18,24 +18,16 @@ import {
   Store,
 } from "lucide-react";
 
-// Full desktop navigation deck
-const DESKTOP_NAV_ITEMS = [
+// Unified navigation items across both desktop and mobile
+const NAV_ITEMS = [
   { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Inventory", href: "/dashboard/inventory", icon: Package },
   { name: "POS Terminal", href: "/dashboard/sales", icon: ShoppingCart },
+  { name: "Sales History", href: "/dashboard/sales/history", icon: Receipt },
+  { name: "Inventory", href: "/dashboard/inventory", icon: Package },
   { name: "Debtors", href: "/dashboard/customers", icon: Users },
   { name: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
   { name: "Daily Z-Report", href: "/dashboard/reconciliation", icon: Scale },
   { name: "Expenses", href: "/dashboard/expenses", icon: Wallet },
-];
-
-// Curated 5 items for the mobile bottom bar to prevent cramping
-const MOBILE_NAV_ITEMS = [
-  { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
-  { name: "POS", href: "/dashboard/sales", icon: ShoppingCart },
-  { name: "Stock", href: "/dashboard/inventory", icon: Package },
-  { name: "Debtors", href: "/dashboard/customers", icon: Users },
-  { name: "Z-Report", href: "/dashboard/reconciliation", icon: Scale },
 ];
 
 const STORAGE_KEY = "sme_sidebar_collapsed";
@@ -72,10 +64,10 @@ export function Sidebar() {
   return (
     <>
       {/* ---------------------------------------------------- */}
-      {/* 1. MOBILE BOTTOM APP BAR (Phones & Handhelds)        */}
+      {/* 1. MOBILE HORIZONTALLY SCROLLABLE BOTTOM DOCK        */}
       {/* ---------------------------------------------------- */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-1 py-1.5 flex items-center justify-around shadow-lg safe-bottom">
-        {MOBILE_NAV_ITEMS.map((item) => {
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-2 py-2 flex items-center gap-2 overflow-x-auto shadow-lg safe-bottom no-scrollbar">
+        {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const isActive = isItemActive(item.href);
 
@@ -83,7 +75,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-col items-center justify-center py-1 px-2 rounded-xl transition text-[10px] font-semibold gap-1 min-w-[50px] ${
+              className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition text-[10px] font-semibold gap-1 shrink-0 whitespace-nowrap ${
                 isActive
                   ? "text-slate-950 font-bold"
                   : "text-slate-400 hover:text-slate-700"
@@ -143,7 +135,7 @@ export function Sidebar() {
 
         {/* Navigation Link Deck */}
         <div className="flex-1 p-3 space-y-1 overflow-y-auto overflow-x-hidden">
-          {DESKTOP_NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = isItemActive(item.href);
 
